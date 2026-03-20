@@ -10,6 +10,7 @@ const fs = require('fs');
 const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,8 +33,32 @@ const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDI
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
+// ─── MongoDB Setup ────────────────────────────────────────────────────────────
+const MONGODB_URI = process.env.MONGODB_URI;
+let useMongo = false;
+let AppData;
+
+if (MONGODB_URI) {
+  mongoose.connect(MONGODB_URI).then(() => {
+    console.log('✅ Connecté à MongoDB');
+    useMongo = true;
+    const schema = new mongoose.Schema({ data: Object }, { strict: false });
+    AppData = mongoose.model('AppData', schema);
+  }).catch(err => {
+    console.error('❌ Erreur MongoDB, fallback JSON activé:', err.message);
+  });
+}
+
 // ─── DB helpers ───────────────────────────────────────────────────────────────
-function readDB() {
+async function readDB() {
+  if (useMongo && AppData) {
+    try {
+      const doc = await AppData.findOne();
+      if (doc && doc.data) return doc.data;
+    } catch (e) { console.error('Erreur lecture MongoDB', e); }
+    return { categories: [], photos: [] };
+  }
+
   try {
     if (!fs.existsSync(DATA_FILE)) return { categories: [], photos: [] };
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -42,7 +67,13 @@ function readDB() {
   }
 }
 
-function writeDB(data) {
+async function writeDB(data) {
+  if (useMongo && AppData) {
+    try {
+      await AppData.findOneAndUpdate({}, { data }, { upsert: true });
+      return;
+    } catch (e) { console.error('Erreur écriture MongoDB', e); }
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
@@ -102,15 +133,15 @@ app.get('/api/auth/check', (req, res) => {
 });
 
 // ─── Categories routes ────────────────────────────────────────────────────────
-app.get('/api/categories', requireAuth, (req, res) => {
-  const db = readDB();
+app.get('/api/categories', requireAuth, async (req, res) => {
+  const db = await readDB();
   res.json(db.categories);
 });
 
-app.post('/api/categories', requireAuth, (req, res) => {
+app.post('/api/categories', requireAuth, async (req, res) => {
   const { name, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nom requis' });
-  const db = readDB();
+  const db = await readDB();
   const category = {
     id: uuidv4(),
     name: name.trim(),
@@ -118,40 +149,40 @@ app.post('/api/categories', requireAuth, (req, res) => {
     createdAt: new Date().toISOString()
   };
   db.categories.push(category);
-  writeDB(db);
+  await writeDB(db);
   res.json(category);
 });
 
-app.put('/api/categories/:id', requireAuth, (req, res) => {
-  const db = readDB();
+app.put('/api/categories/:id', requireAuth, async (req, res) => {
+  const db = await readDB();
   const idx = db.categories.findIndex(c => c.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Catégorie non trouvée' });
   db.categories[idx] = { ...db.categories[idx], ...req.body, id: req.params.id };
-  writeDB(db);
+  await writeDB(db);
   res.json(db.categories[idx]);
 });
 
-app.delete('/api/categories/:id', requireAuth, (req, res) => {
-  const db = readDB();
+app.delete('/api/categories/:id', requireAuth, async (req, res) => {
+  const db = await readDB();
   const catId = req.params.id;
   db.categories = db.categories.filter(c => c.id !== catId);
   db.photos = db.photos.map(p => ({
     ...p,
     categoryId: p.categoryId === catId ? null : p.categoryId
   }));
-  writeDB(db);
+  await writeDB(db);
   res.json({ success: true });
 });
 
 // ─── Photos routes ────────────────────────────────────────────────────────────
-app.get('/api/photos', requireAuth, (req, res) => {
-  const db = readDB();
+app.get('/api/photos', requireAuth, async (req, res) => {
+  const db = await readDB();
   res.json(db.photos);
 });
 
 app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (req, res) => {
   const { categoryId } = req.body;
-  const db = readDB();
+  const db = await readDB();
   const uploaded = [];
 
   for (const file of req.files) {
@@ -217,27 +248,27 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
     }
   }
 
-  writeDB(db);
+  await writeDB(db);
   res.json(uploaded);
 });
 
-app.put('/api/photos/:id', requireAuth, (req, res) => {
-  const db = readDB();
+app.put('/api/photos/:id', requireAuth, async (req, res) => {
+  const db = await readDB();
   const idx = db.photos.findIndex(p => p.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Photo non trouvée' });
   db.photos[idx] = { ...db.photos[idx], ...req.body, id: req.params.id };
-  writeDB(db);
+  await writeDB(db);
   res.json(db.photos[idx]);
 });
 
-app.put('/api/photos/reorder', requireAuth, (req, res) => {
+app.put('/api/photos/reorder', requireAuth, async (req, res) => {
   const { photoIds } = req.body;
-  const db = readDB();
+  const db = await readDB();
   const photoMap = new Map(db.photos.map(p => [p.id, p]));
   const reordered = photoIds.map(id => photoMap.get(id)).filter(Boolean);
   const rest = db.photos.filter(p => !photoIds.includes(p.id));
   db.photos = [...reordered, ...rest];
-  writeDB(db);
+  await writeDB(db);
   res.json({ success: true });
 });
 
@@ -259,36 +290,35 @@ async function removePhoto(photo) {
 }
 
 app.delete('/api/photos/:id', requireAuth, async (req, res) => {
-  const db = readDB();
+  const db = await readDB();
   const photo = db.photos.find(p => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
   await removePhoto(photo);
   db.photos = db.photos.filter(p => p.id !== req.params.id);
-  writeDB(db);
+  await writeDB(db);
   res.json({ success: true });
 });
 
 app.delete('/api/photos', requireAuth, async (req, res) => {
   const { ids } = req.body;
-  const db = readDB();
+  const db = await readDB();
 
   const toDelete = db.photos.filter(p => ids.includes(p.id));
   await Promise.all(toDelete.map(p => removePhoto(p)));
 
   db.photos = db.photos.filter(p => !ids.includes(p.id));
-  writeDB(db);
+  await writeDB(db);
   res.json({ success: true });
 });
 
 // ─── Download routes ──────────────────────────────────────────────────────────
-app.get('/api/download/:id', requireAuth, (req, res) => {
-  const db = readDB();
+app.get('/api/download/:id', requireAuth, async (req, res) => {
+  const db = await readDB();
   const photo = db.photos.find(p => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
   if (photo.filename.startsWith('http')) {
-    // Redirect cleanly to the cloudinary URL
     res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
   } else {
     const filepath = path.join(UPLOADS_DIR, photo.filename);
@@ -299,7 +329,7 @@ app.get('/api/download/:id', requireAuth, (req, res) => {
 
 app.post('/api/download/bulk', requireAuth, async (req, res) => {
   const { ids } = req.body;
-  const db = readDB();
+  const db = await readDB();
   const photos = db.photos.filter(p => ids.includes(p.id));
 
   if (photos.length === 0) return res.status(404).json({ error: 'Aucune photo trouvée' });

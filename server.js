@@ -40,25 +40,41 @@ let supabase = null;
 
 if (SUPABASE_URL && SUPABASE_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  console.log('✅ Connecté à Supabase');
+  console.log('✅ Supabase configuration ready');
 } else {
-  console.log('❌ Supabase non configuré, fallback JSON activé');
+  console.log('⚠️ Supabase URL or Key missing, using local JSON fallback');
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 async function readDB() {
   if (supabase) {
     try {
-      const { data, error } = await supabase.from('app_data').select('data').eq('id', 1).single();
-      if (!error && data && data.data) return data.data;
-    } catch (e) { console.error('Erreur lecture Supabase', e); }
-    return { categories: [], photos: [] };
+      const { data, error } = await supabase
+        .from('app_data')
+        .select('data')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('❌ Supabase Read Error:', error.message);
+        throw new Error('Supabase Read Error: ' + error.message);
+      }
+
+      if (data && data.data) return data.data;
+
+      console.log('ℹ️ No existing data in Supabase app_data table, returning empty defaults');
+    } catch (e) {
+      console.error('❌ Database Access Exception:', e.message);
+      // We don't want to break the whole app, but we need users to know why images are missing
+    }
   }
 
   try {
     if (!fs.existsSync(DATA_FILE)) return { categories: [], photos: [] };
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
+    const content = fs.readFileSync(DATA_FILE, 'utf8');
+    return JSON.parse(content || '{"categories": [], "photos": []}');
+  } catch (e) {
+    console.error('❌ Local File Read Error:', e.message);
     return { categories: [], photos: [] };
   }
 }
@@ -66,11 +82,24 @@ async function readDB() {
 async function writeDB(dbData) {
   if (supabase) {
     try {
-      await supabase.from('app_data').upsert({ id: 1, data: dbData });
-      return;
-    } catch (e) { console.error('Erreur écriture Supabase', e); }
+      const { error } = await supabase
+        .from('app_data')
+        .upsert({ id: 1, data: dbData });
+
+      if (error) {
+        console.error('❌ Supabase Write Error:', error.message);
+        // If upsert fails, we still try to write locally as a safety measure
+      } else {
+        return;
+      }
+    } catch (e) { console.error('❌ Supabase Write Exception:', e.message); }
   }
-  fs.writeFileSync(DATA_FILE, JSON.stringify(dbData, null, 2));
+
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(dbData, null, 2));
+  } catch (e) {
+    console.error('❌ Local File Write Error:', e.message);
+  }
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -100,7 +129,8 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|webp|heic|avif/i;
-    if (allowed.test(path.extname(file.originalname)) || allowed.test(file.mimetype)) {
+    const isAllowed = allowed.test(path.extname(file.originalname)) || allowed.test(file.mimetype);
+    if (isAllowed) {
       cb(null, true);
     } else {
       cb(new Error('Format non supporté. Utilisez JPG, PNG, GIF, WebP.'));
@@ -130,55 +160,83 @@ app.get('/api/auth/check', (req, res) => {
 
 // ─── Categories routes ────────────────────────────────────────────────────────
 app.get('/api/categories', requireAuth, async (req, res) => {
-  const db = await readDB();
-  res.json(db.categories);
+  try {
+    const db = await readDB();
+    res.json(db.categories || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/categories', requireAuth, async (req, res) => {
   const { name, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nom requis' });
-  const db = await readDB();
-  const category = {
-    id: uuidv4(),
-    name: name.trim(),
-    color: color || '#6366f1',
-    createdAt: new Date().toISOString()
-  };
-  db.categories.push(category);
-  await writeDB(db);
-  res.json(category);
+
+  try {
+    const db = await readDB();
+    const category = {
+      id: uuidv4(),
+      name: name.trim(),
+      color: color || '#6366f1',
+      createdAt: new Date().toISOString()
+    };
+    db.categories = db.categories || [];
+    db.categories.push(category);
+    await writeDB(db);
+    res.json(category);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.put('/api/categories/:id', requireAuth, async (req, res) => {
-  const db = await readDB();
-  const idx = db.categories.findIndex(c => c.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Catégorie non trouvée' });
-  db.categories[idx] = { ...db.categories[idx], ...req.body, id: req.params.id };
-  await writeDB(db);
-  res.json(db.categories[idx]);
+  try {
+    const db = await readDB();
+    const idx = db.categories.findIndex(c => c.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Catégorie non trouvée' });
+    db.categories[idx] = { ...db.categories[idx], ...req.body, id: req.params.id };
+    await writeDB(db);
+    res.json(db.categories[idx]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.delete('/api/categories/:id', requireAuth, async (req, res) => {
-  const db = await readDB();
-  const catId = req.params.id;
-  db.categories = db.categories.filter(c => c.id !== catId);
-  db.photos = db.photos.map(p => ({
-    ...p,
-    categoryId: p.categoryId === catId ? null : p.categoryId
-  }));
-  await writeDB(db);
-  res.json({ success: true });
+  try {
+    const db = await readDB();
+    const catId = req.params.id;
+    db.categories = db.categories.filter(c => c.id !== catId);
+    db.photos = db.photos.map(p => ({
+      ...p,
+      categoryId: p.categoryId === catId ? null : p.categoryId
+    }));
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── Photos routes ────────────────────────────────────────────────────────────
 app.get('/api/photos', requireAuth, async (req, res) => {
-  const db = await readDB();
-  res.json(db.photos);
+  try {
+    const db = await readDB();
+    res.json(db.photos || []);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (req, res) => {
   const { categoryId } = req.body;
-  const db = await readDB();
+  let db;
+  try {
+    db = await readDB();
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to read database: " + e.message });
+  }
+
   const uploaded = [];
 
   for (const file of req.files) {
@@ -200,18 +258,26 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
       let photoFilename, photoThumbFilename, finalMeta, photoSize, cloudinaryId;
 
       if (useCloudinary) {
+        console.log(`☁️ Uploading to Cloudinary: ${file.originalname}...`);
         const buffer = await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toBuffer();
         const result = await new Promise((resolve, reject) => {
           cloudinary.uploader.upload_stream({ folder: 'album-apex' }, (error, res) => {
-            if (error) reject(error);
-            else resolve(res);
+            if (error) {
+              console.error('❌ Cloudinary Upload Error:', error.message);
+              reject(error);
+            } else {
+              resolve(res);
+            }
           }).end(buffer);
         });
+
         photoFilename = result.secure_url;
+        // Generate thumbnail using Cloudinary transformations
         photoThumbFilename = result.secure_url.replace('/upload/', '/upload/w_400,h_400,c_fill,q_75/');
         finalMeta = { width: result.width, height: result.height };
         photoSize = result.bytes;
         cloudinaryId = result.public_id;
+        console.log(`✅ Cloudinary Success: ${photoFilename}`);
       } else {
         await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toFile(filepath);
         await sharp(file.buffer)
@@ -226,8 +292,8 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
 
       const photo = {
         id,
-        filename: photoFilename,
-        thumbFilename: photoThumbFilename,
+        filename: photoFilename || filename,
+        thumbFilename: photoThumbFilename || thumbFilename,
         cloudinaryId,
         originalName: file.originalname,
         categoryId: categoryId || null,
@@ -237,35 +303,49 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
         uploadedAt: new Date().toISOString()
       };
 
+      db.photos = db.photos || [];
       db.photos.push(photo);
       uploaded.push(photo);
     } catch (err) {
-      console.error('Erreur traitement photo:', file.originalname, err.message);
+      console.error('❌ Upload processing error:', file.originalname, err.message);
+      // We continue with other files if one fails
     }
   }
 
-  await writeDB(db);
-  res.json(uploaded);
+  try {
+    await writeDB(db);
+    res.json(uploaded);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to save database: " + e.message });
+  }
 });
 
 app.put('/api/photos/:id', requireAuth, async (req, res) => {
-  const db = await readDB();
-  const idx = db.photos.findIndex(p => p.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Photo non trouvée' });
-  db.photos[idx] = { ...db.photos[idx], ...req.body, id: req.params.id };
-  await writeDB(db);
-  res.json(db.photos[idx]);
+  try {
+    const db = await readDB();
+    const idx = db.photos.findIndex(p => p.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Photo non trouvée' });
+    db.photos[idx] = { ...db.photos[idx], ...req.body, id: req.params.id };
+    await writeDB(db);
+    res.json(db.photos[idx]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.put('/api/photos/reorder', requireAuth, async (req, res) => {
   const { photoIds } = req.body;
-  const db = await readDB();
-  const photoMap = new Map(db.photos.map(p => [p.id, p]));
-  const reordered = photoIds.map(id => photoMap.get(id)).filter(Boolean);
-  const rest = db.photos.filter(p => !photoIds.includes(p.id));
-  db.photos = [...reordered, ...rest];
-  await writeDB(db);
-  res.json({ success: true });
+  try {
+    const db = await readDB();
+    const photoMap = new Map(db.photos.map(p => [p.id, p]));
+    const reordered = photoIds.map(id => photoMap.get(id)).filter(Boolean);
+    const rest = db.photos.filter(p => !photoIds.includes(p.id));
+    db.photos = [...reordered, ...rest];
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 async function removePhoto(photo) {
@@ -286,79 +366,91 @@ async function removePhoto(photo) {
 }
 
 app.delete('/api/photos/:id', requireAuth, async (req, res) => {
-  const db = await readDB();
-  const photo = db.photos.find(p => p.id === req.params.id);
-  if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
+  try {
+    const db = await readDB();
+    const photo = db.photos.find(p => p.id === req.params.id);
+    if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
-  await removePhoto(photo);
-  db.photos = db.photos.filter(p => p.id !== req.params.id);
-  await writeDB(db);
-  res.json({ success: true });
+    await removePhoto(photo);
+    db.photos = db.photos.filter(p => p.id !== req.params.id);
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.delete('/api/photos', requireAuth, async (req, res) => {
   const { ids } = req.body;
-  const db = await readDB();
-
-  const toDelete = db.photos.filter(p => ids.includes(p.id));
-  await Promise.all(toDelete.map(p => removePhoto(p)));
-
-  db.photos = db.photos.filter(p => !ids.includes(p.id));
-  await writeDB(db);
-  res.json({ success: true });
+  try {
+    const db = await readDB();
+    const toDelete = db.photos.filter(p => ids.includes(p.id));
+    await Promise.all(toDelete.map(p => removePhoto(p)));
+    db.photos = db.photos.filter(p => !ids.includes(p.id));
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── Download routes ──────────────────────────────────────────────────────────
 app.get('/api/download/:id', requireAuth, async (req, res) => {
-  const db = await readDB();
-  const photo = db.photos.find(p => p.id === req.params.id);
-  if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
+  try {
+    const db = await readDB();
+    const photo = db.photos.find(p => p.id === req.params.id);
+    if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
-  if (photo.filename.startsWith('http')) {
-    res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
-  } else {
-    const filepath = path.join(UPLOADS_DIR, photo.filename);
-    if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
-    res.download(filepath, photo.originalName || photo.filename);
+    if (photo.filename.startsWith('http')) {
+      res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
+    } else {
+      const filepath = path.join(UPLOADS_DIR, photo.filename);
+      if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
+      res.download(filepath, photo.originalName || photo.filename);
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
 app.post('/api/download/bulk', requireAuth, async (req, res) => {
   const { ids } = req.body;
-  const db = await readDB();
-  const photos = db.photos.filter(p => ids.includes(p.id));
+  try {
+    const db = await readDB();
+    const photos = db.photos.filter(p => ids.includes(p.id));
+    if (photos.length === 0) return res.status(404).json({ error: 'Aucune photo trouvée' });
 
-  if (photos.length === 0) return res.status(404).json({ error: 'Aucune photo trouvée' });
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="album-apex-${Date.now()}.zip"`
+    });
 
-  res.set({
-    'Content-Type': 'application/zip',
-    'Content-Disposition': `attachment; filename="album-apex-${Date.now()}.zip"`
-  });
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => { console.error(err); res.end(); });
+    archive.pipe(res);
 
-  const archive = archiver('zip', { zlib: { level: 6 } });
-  archive.on('error', err => { console.error(err); res.end(); });
-  archive.pipe(res);
-
-  for (const photo of photos) {
-    if (photo.filename.startsWith('http')) {
-      const stream = await new Promise((resolve) => {
-        https.get(photo.filename, (response) => {
-          if (response.statusCode === 200) resolve(response);
-          else resolve(null);
-        }).on('error', () => resolve(null));
-      });
-      if (stream) {
-        archive.append(stream, { name: photo.originalName || photo.id + '.jpg' });
-      }
-    } else {
-      const filepath = path.join(UPLOADS_DIR, photo.filename);
-      if (fs.existsSync(filepath)) {
-        archive.file(filepath, { name: photo.originalName || photo.filename });
+    for (const photo of photos) {
+      if (photo.filename.startsWith('http')) {
+        const stream = await new Promise((resolve) => {
+          https.get(photo.filename, (response) => {
+            if (response.statusCode === 200) resolve(response);
+            else resolve(null);
+          }).on('error', () => resolve(null));
+        });
+        if (stream) {
+          archive.append(stream, { name: photo.originalName || photo.id + '.jpg' });
+        }
+      } else {
+        const filepath = path.join(UPLOADS_DIR, photo.filename);
+        if (fs.existsSync(filepath)) {
+          archive.file(filepath, { name: photo.originalName || photo.filename });
+        }
       }
     }
+    archive.finalize();
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ error: e.message });
   }
-
-  archive.finalize();
 });
 
 // ─── Catch-all: serve frontend ────────────────────────────────────────────────
@@ -368,7 +460,8 @@ app.get('*', (req, res) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Album Apex démarré sur http://localhost:${PORT}`);
-  console.log(`☁️  Cloudinary: ${useCloudinary ? 'Actif' : 'Inactif'}`);
-  console.log(`🔑 Mot de passe: ${PASSWORD}`);
+  console.log(`🚀 Album Apex started on http://localhost:${PORT}`);
+  console.log(`☁️  Cloudinary: ${useCloudinary ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`📡 Supabase: ${supabase ? 'ENABLED' : 'DISABLED'}`);
+  console.log(`🔑 APP_PASSWORD: ${PASSWORD}`);
 });

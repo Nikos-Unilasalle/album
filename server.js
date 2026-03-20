@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
@@ -6,7 +7,9 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 const { v4: uuidv4 } = require('uuid');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +19,13 @@ const PASSWORD = process.env.APP_PASSWORD || 'apex2024';
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const MAX_WIDTH = 1920;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
 // ─── Ensure directories exist ─────────────────────────────────────────────────
 [UPLOADS_DIR, path.join(__dirname, 'data')].forEach(dir => {
@@ -125,7 +135,6 @@ app.delete('/api/categories/:id', requireAuth, (req, res) => {
   const db = readDB();
   const catId = req.params.id;
   db.categories = db.categories.filter(c => c.id !== catId);
-  // Unassign photos from deleted category
   db.photos = db.photos.map(p => ({
     ...p,
     categoryId: p.categoryId === catId ? null : p.categoryId
@@ -148,39 +157,56 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
   for (const file of req.files) {
     try {
       const id = uuidv4();
-      const ext = '.jpg'; // Always save as JPEG
+      const ext = '.jpg';
       const filename = `${id}${ext}`;
       const thumbFilename = `thumb_${id}${ext}`;
       const filepath = path.join(UPLOADS_DIR, filename);
       const thumbpath = path.join(UPLOADS_DIR, thumbFilename);
 
-      // Resize full image to max 1920px width
-      let sharpImg = sharp(file.buffer).rotate(); // auto-rotate by EXIF
+      let sharpImg = sharp(file.buffer).rotate();
 
       const meta = await sharpImg.metadata();
       if (meta.width > MAX_WIDTH) {
         sharpImg = sharpImg.resize({ width: MAX_WIDTH, withoutEnlargement: true });
       }
-      await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toFile(filepath);
 
-      // Create thumbnail (400px)
-      await sharp(file.buffer)
-        .rotate()
-        .resize({ width: 400, height: 400, fit: 'cover' })
-        .jpeg({ quality: 75 })
-        .toFile(thumbpath);
+      let photoFilename, photoThumbFilename, finalMeta, photoSize, cloudinaryId;
 
-      const finalMeta = await sharp(filepath).metadata();
+      if (useCloudinary) {
+        const buffer = await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream({ folder: 'album-apex' }, (error, res) => {
+            if (error) reject(error);
+            else resolve(res);
+          }).end(buffer);
+        });
+        photoFilename = result.secure_url;
+        photoThumbFilename = result.secure_url.replace('/upload/', '/upload/w_400,h_400,c_fill,q_75/');
+        finalMeta = { width: result.width, height: result.height };
+        photoSize = result.bytes;
+        cloudinaryId = result.public_id;
+      } else {
+        await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toFile(filepath);
+        await sharp(file.buffer)
+          .rotate()
+          .resize({ width: 400, height: 400, fit: 'cover' })
+          .jpeg({ quality: 75 })
+          .toFile(thumbpath);
+
+        finalMeta = await sharp(filepath).metadata();
+        photoSize = fs.statSync(filepath).size;
+      }
 
       const photo = {
         id,
-        filename,
-        thumbFilename,
+        filename: photoFilename,
+        thumbFilename: photoThumbFilename,
+        cloudinaryId,
         originalName: file.originalname,
         categoryId: categoryId || null,
         width: finalMeta.width,
         height: finalMeta.height,
-        size: fs.statSync(filepath).size,
+        size: photoSize,
         uploadedAt: new Date().toISOString()
       };
 
@@ -207,7 +233,6 @@ app.put('/api/photos/:id', requireAuth, (req, res) => {
 app.put('/api/photos/reorder', requireAuth, (req, res) => {
   const { photoIds } = req.body;
   const db = readDB();
-  // Reorder photos array based on provided order
   const photoMap = new Map(db.photos.map(p => [p.id, p]));
   const reordered = photoIds.map(id => photoMap.get(id)).filter(Boolean);
   const rest = db.photos.filter(p => !photoIds.includes(p.id));
@@ -216,39 +241,40 @@ app.put('/api/photos/reorder', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-app.delete('/api/photos/:id', requireAuth, (req, res) => {
+async function removePhoto(photo) {
+  if (useCloudinary && photo.cloudinaryId) {
+    try {
+      await cloudinary.uploader.destroy(photo.cloudinaryId);
+    } catch (e) {
+      console.error('Failed to delete from Cloudinary:', e.message);
+    }
+  } else {
+    [photo.filename, photo.thumbFilename].forEach(f => {
+      if (f && !f.startsWith('http')) {
+        const fp = path.join(UPLOADS_DIR, f);
+        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      }
+    });
+  }
+}
+
+app.delete('/api/photos/:id', requireAuth, async (req, res) => {
   const db = readDB();
   const photo = db.photos.find(p => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
-  // Delete files
-  [photo.filename, photo.thumbFilename].forEach(f => {
-    if (f) {
-      const fp = path.join(UPLOADS_DIR, f);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    }
-  });
-
+  await removePhoto(photo);
   db.photos = db.photos.filter(p => p.id !== req.params.id);
   writeDB(db);
   res.json({ success: true });
 });
 
-app.delete('/api/photos', requireAuth, (req, res) => {
+app.delete('/api/photos', requireAuth, async (req, res) => {
   const { ids } = req.body;
   const db = readDB();
 
-  ids.forEach(id => {
-    const photo = db.photos.find(p => p.id === id);
-    if (photo) {
-      [photo.filename, photo.thumbFilename].forEach(f => {
-        if (f) {
-          const fp = path.join(UPLOADS_DIR, f);
-          if (fs.existsSync(fp)) fs.unlinkSync(fp);
-        }
-      });
-    }
-  });
+  const toDelete = db.photos.filter(p => ids.includes(p.id));
+  await Promise.all(toDelete.map(p => removePhoto(p)));
 
   db.photos = db.photos.filter(p => !ids.includes(p.id));
   writeDB(db);
@@ -261,13 +287,17 @@ app.get('/api/download/:id', requireAuth, (req, res) => {
   const photo = db.photos.find(p => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
-  const filepath = path.join(UPLOADS_DIR, photo.filename);
-  if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
-
-  res.download(filepath, photo.originalName || photo.filename);
+  if (photo.filename.startsWith('http')) {
+    // Redirect cleanly to the cloudinary URL
+    res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
+  } else {
+    const filepath = path.join(UPLOADS_DIR, photo.filename);
+    if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
+    res.download(filepath, photo.originalName || photo.filename);
+  }
 });
 
-app.post('/api/download/bulk', requireAuth, (req, res) => {
+app.post('/api/download/bulk', requireAuth, async (req, res) => {
   const { ids } = req.body;
   const db = readDB();
   const photos = db.photos.filter(p => ids.includes(p.id));
@@ -283,12 +313,24 @@ app.post('/api/download/bulk', requireAuth, (req, res) => {
   archive.on('error', err => { console.error(err); res.end(); });
   archive.pipe(res);
 
-  photos.forEach(photo => {
-    const filepath = path.join(UPLOADS_DIR, photo.filename);
-    if (fs.existsSync(filepath)) {
-      archive.file(filepath, { name: photo.originalName || photo.filename });
+  for (const photo of photos) {
+    if (photo.filename.startsWith('http')) {
+      const stream = await new Promise((resolve) => {
+        https.get(photo.filename, (response) => {
+          if (response.statusCode === 200) resolve(response);
+          else resolve(null);
+        }).on('error', () => resolve(null));
+      });
+      if (stream) {
+        archive.append(stream, { name: photo.originalName || photo.id + '.jpg' });
+      }
+    } else {
+      const filepath = path.join(UPLOADS_DIR, photo.filename);
+      if (fs.existsSync(filepath)) {
+        archive.file(filepath, { name: photo.originalName || photo.filename });
+      }
     }
-  });
+  }
 
   archive.finalize();
 });
@@ -301,5 +343,6 @@ app.get('*', (req, res) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 Album Apex démarré sur http://localhost:${PORT}`);
+  console.log(`☁️  Cloudinary: ${useCloudinary ? 'Actif' : 'Inactif'}`);
   console.log(`🔑 Mot de passe: ${PASSWORD}`);
 });

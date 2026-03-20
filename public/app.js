@@ -212,13 +212,14 @@ function renderGallery() {
 function createPhotoCard(photo, idx) {
     const cat = state.categories.find(c => c.id === photo.categoryId);
     const isSelected = state.selectedPhotos.has(photo.id);
+    const thumbSrc = (photo.thumbFilename || photo.filename).startsWith('http') ? (photo.thumbFilename || photo.filename) : `/uploads/${photo.thumbFilename || photo.filename}`;
 
     const card = el('div', `photo-card${isSelected ? ' selected' : ''}`);
     card.dataset.id = photo.id;
     card.dataset.idx = idx;
 
     card.innerHTML = `
-    <img src="/uploads/${photo.thumbFilename || photo.filename}" alt="${escHtml(photo.originalName)}" loading="lazy" />
+    <img src="${thumbSrc}" alt="${escHtml(photo.originalName)}" loading="lazy" />
     <div class="photo-check">
       <svg class="photo-check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
         <polyline points="20 6 9 17 4 12"/>
@@ -228,6 +229,12 @@ function createPhotoCard(photo, idx) {
     <div class="photo-overlay">
       <span class="photo-name">${escHtml(photo.originalName)}</span>
       <div class="photo-actions-row">
+        <button class="photo-action-btn" data-action="cat" title="Changer la catégorie" aria-label="Changer la catégorie">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
+            <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+          </svg>
+        </button>
         <button class="photo-action-btn" data-action="download" title="Télécharger" aria-label="Télécharger">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -262,6 +269,10 @@ function createPhotoCard(photo, idx) {
     });
 
     // Action buttons
+    card.querySelector('[data-action="cat"]').addEventListener('click', e => {
+        e.stopPropagation();
+        openChangeCatModal([photo.id]);
+    });
     card.querySelector('[data-action="download"]').addEventListener('click', e => {
         e.stopPropagation();
         downloadSingle(photo.id);
@@ -398,10 +409,20 @@ function closeLightbox() {
 function updateLightbox() {
     const photo = state.filteredPhotos[state.lightboxIndex];
     if (!photo) return;
-    $('lightbox-img').src = `/uploads/${photo.filename}`;
+    $('lightbox-img').src = photo.filename.startsWith('http') ? photo.filename : `/uploads/${photo.filename}`;
     $('lightbox-img').alt = photo.originalName;
     $('lightbox-name').textContent = photo.originalName;
     $('lightbox-dims').textContent = photo.width && photo.height ? `${photo.width} × ${photo.height}px` : '';
+
+    const cat = state.categories.find(c => c.id === photo.categoryId);
+    const catEl = $('lightbox-cat');
+    if (cat) {
+        catEl.innerHTML = `<span class="chip-dot" style="background:${cat.color}"></span>${escHtml(cat.name)}`;
+        catEl.classList.remove('hidden');
+    } else {
+        catEl.classList.add('hidden');
+    }
+
     $('lightbox-prev').style.display = state.lightboxIndex <= 0 ? 'none' : 'flex';
     $('lightbox-next').style.display = state.lightboxIndex >= state.filteredPhotos.length - 1 ? 'none' : 'flex';
 }
@@ -519,8 +540,8 @@ function updateQueueItemStatus(item) {
     };
     el.className = `queue-status ${item.status}`;
     el.innerHTML = `${icons[item.status] || ''}${item.status === 'pending' ? 'En attente' :
-            item.status === 'uploading' ? 'Upload…' :
-                item.status === 'done' ? 'OK' : 'Erreur'
+        item.status === 'uploading' ? 'Upload…' :
+            item.status === 'done' ? 'OK' : 'Erreur'
         }`;
     // Hide remove button when done
     const row = el.closest('.queue-item');
@@ -728,6 +749,83 @@ $('cat-form').addEventListener('submit', async e => {
     } catch (err) {
         toast(err.message || 'Erreur', 'error');
     }
+});
+
+// ── Change Category ───────────────────────────────────────────────────────────
+let targetPhotosToChangeCat = [];
+
+function openChangeCatModal(photoIds) {
+    targetPhotosToChangeCat = photoIds;
+    const sel = $('change-cat-select');
+    sel.innerHTML = '<option value="">— Sans catégorie —</option>';
+    state.categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.name;
+        sel.appendChild(opt);
+    });
+
+    if (photoIds.length === 1) {
+        const photo = state.photos.find(p => p.id === photoIds[0]);
+        if (photo && photo.categoryId) sel.value = photo.categoryId;
+        else sel.value = '';
+        $('change-cat-title').textContent = 'Changer la catégorie';
+    } else {
+        sel.value = '';
+        $('change-cat-title').textContent = `Déplacer ${photoIds.length} photo${photoIds.length > 1 ? 's' : ''}`;
+    }
+
+    $('change-cat-modal').classList.remove('hidden');
+}
+
+function closeChangeCatModal() {
+    $('change-cat-modal').classList.add('hidden');
+    targetPhotosToChangeCat = [];
+}
+
+$('change-cat-close').addEventListener('click', closeChangeCatModal);
+$('change-cat-cancel').addEventListener('click', closeChangeCatModal);
+$('change-cat-modal-overlay').addEventListener('click', closeChangeCatModal);
+
+$('change-cat-save').addEventListener('click', async () => {
+    const newCatId = $('change-cat-select').value || null;
+    const ids = targetPhotosToChangeCat;
+    if (!ids.length) return;
+
+    const btn = $('change-cat-save');
+    btn.disabled = true;
+    btn.textContent = 'En cours...';
+
+    try {
+        await Promise.all(ids.map(id => api('PUT', `/api/photos/${id}`, { categoryId: newCatId })));
+
+        ids.forEach(id => {
+            const idx = state.photos.findIndex(p => p.id === id);
+            if (idx !== -1) state.photos[idx].categoryId = newCatId;
+        });
+
+        toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} déplacée${ids.length > 1 ? 's' : ''}`, 'success');
+        closeChangeCatModal();
+        renderFilterBar();
+        renderGallery();
+        if (!$('lightbox').classList.contains('hidden')) {
+            updateLightbox();
+        }
+    } catch (err) {
+        toast('Erreur lors du déplacement', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Déplacer';
+    }
+});
+
+$('btn-change-cat-selected').addEventListener('click', () => {
+    openChangeCatModal([...state.selectedPhotos]);
+});
+
+$('lightbox-change-cat').addEventListener('click', () => {
+    const photo = state.filteredPhotos[state.lightboxIndex];
+    if (photo) openChangeCatModal([photo.id]);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

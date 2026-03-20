@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Album Apex — Plateforme Photo</title>
-  <meta name="description" content="Plateforme d'échange et de partage de photos par catégories avec téléchargement groupé." />
+  <meta name="description"
+    content="Plateforme d'échange et de partage de photos par catégories avec téléchargement groupé." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
+
 <body>
 
   <!-- ── Login Screen ─────────────────────────────────────────── -->
@@ -22,15 +26,15 @@
     <div class="login-card">
       <div class="login-logo">
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-          <rect width="40" height="40" rx="12" fill="url(#grad1)"/>
+          <rect width="40" height="40" rx="12" fill="url(#grad1)" />
           <defs>
             <linearGradient id="grad1" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#6366f1"/>
-              <stop offset="100%" stop-color="#e879f9"/>
+              <stop offset="0%" stop-color="#6366f1" />
+              <stop offset="100%" stop-color="#e879f9" />
             </linearGradient>
           </defs>
-          <path d="M8 28L15 18L20 24L26 15L32 28H8Z" fill="white" opacity="0.9"/>
-          <circle cx="12" cy="14" r="3" fill="white" opacity="0.8"/>
+          <path d="M8 28L15 18L20 24L26 15L32 28H8Z" fill="white" opacity="0.9" />
+          <circle cx="12" cy="14" r="3" fill="white" opacity="0.8" />
         </svg>
       </div>
       <h1 class="login-title">Album Apex</h1>
@@ -39,15 +43,19 @@
         <div class="input-group">
           <label for="password-input">Mot de passe</label>
           <div class="input-wrapper">
-            <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            <input type="password" id="password-input" placeholder="Entrez le mot de passe" autocomplete="current-password" />
-            <button type="button" id="toggle-password" class="toggle-pw-btn" aria-label="Afficher/masquer le mot de passe">
-              <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+            <input type="password" id="password-input" placeholder="Entrez le mot de passe"
+              autocomplete="current-password" />
+            <button type="button" id="toggle-password" class="toggle-pw-btn"
+              aria-label="Afficher/masquer le mot de passe">
+              <svg id="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
           </div>
@@ -71,21 +79,21 @@
       <div class="sidebar-header">
         <div class="sidebar-logo">
           <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
-            <rect width="40" height="40" rx="10" fill="url(#grad2)"/>
+            <rect width="40" height="40" rx="10" fill="url(#grad2)" />
             <defs>
               <linearGradient id="grad2" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#6366f1"/>
-                <stop offset="100%" stop-color="#e879f9"/>
+                <stop offset="0%" stop-color="#6366f1" />
+                <stop offset="100%" stop-color="#e879f9" />
               </linearGradient>
             </defs>
-            <path d="M8 28L15 18L20 24L26 15L32 28H8Z" fill="white" opacity="0.9"/>
-            <circle cx="12" cy="14" r="3" fill="white" opacity="0.8"/>
+            <path d="M8 28L15 18L20 24L26 15L32 28H8Z" fill="white" opacity="0.9" />
+            <circle cx="12" cy="14" r="3" fill="white" opacity="0.8" />
           </svg>
           <span>Album Apex</span>
         </div>
         <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Réduire le menu">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M15 18l-6-6 6-6"/>
+            <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
       </div>
@@ -93,22 +101,25 @@
       <nav class="sidebar-nav">
         <button id="nav-gallery" class="nav-item active" data-view="gallery">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
           </svg>
           <span>Galerie</span>
         </button>
         <button id="nav-upload" class="nav-item" data-view="upload">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <span>Uploader</span>
         </button>
         <button id="nav-categories" class="nav-item" data-view="categories">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-            <line x1="7" y1="7" x2="7.01" y2="7"/>
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+            <line x1="7" y1="7" x2="7.01" y2="7" />
           </svg>
           <span>Catégories</span>
         </button>
@@ -117,8 +128,9 @@
       <div class="sidebar-footer">
         <button id="logout-btn" class="nav-item nav-item-danger">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
           <span>Déconnexion</span>
         </button>
@@ -139,17 +151,27 @@
             <!-- Selection actions -->
             <div id="selection-actions" class="selection-actions hidden">
               <span id="selection-count" class="selection-badge">0 sélectionnée(s)</span>
+              <button id="btn-change-cat-selected" class="btn btn-primary btn-sm">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
+                  <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+                </svg>
+                Catégorie
+              </button>
               <button id="btn-download-selected" class="btn btn-success btn-sm">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
                 Télécharger
               </button>
               <button id="btn-delete-selected" class="btn btn-danger btn-sm">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                  <path d="M10 11v6m4-6v6"/><path d="M9 6V4h6v2"/>
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v6m4-6v6" />
+                  <path d="M9 6V4h6v2" />
                 </svg>
                 Supprimer
               </button>
@@ -157,7 +179,8 @@
             </div>
             <button id="btn-select-all" class="btn btn-ghost btn-sm">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
               Tout sélectionner
             </button>
@@ -178,10 +201,11 @@
         <!-- Photo Grid -->
         <div class="photo-grid" id="photo-grid">
           <div class="empty-state" id="gallery-empty">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"
+              opacity="0.3">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
             </svg>
             <p>Aucune photo pour le moment</p>
             <p class="empty-sub">Commencez par uploader des photos</p>
@@ -211,8 +235,9 @@
             <div class="drop-zone-inner">
               <div class="drop-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
               </div>
               <p class="drop-title">Glissez-déposez vos photos ici</p>
@@ -229,8 +254,9 @@
             <button id="btn-clear-queue" class="btn btn-ghost">Vider la liste</button>
             <button id="btn-upload" class="btn btn-primary">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
               Uploader
             </button>
@@ -247,7 +273,8 @@
           </div>
           <button id="btn-new-category" class="btn btn-primary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             Nouvelle catégorie
           </button>
@@ -255,9 +282,10 @@
 
         <div class="categories-grid" id="categories-grid">
           <div class="empty-state" id="categories-empty">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3">
-              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"
+              opacity="0.3">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
             </svg>
             <p>Aucune catégorie créée</p>
             <p class="empty-sub">Créez des catégories pour organiser vos photos</p>
@@ -273,12 +301,13 @@
     <div class="lightbox-overlay" id="lightbox-overlay"></div>
     <button class="lightbox-close" id="lightbox-close" aria-label="Fermer">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
       </svg>
     </button>
     <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Précédent">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M15 18l-6-6 6-6"/>
+        <path d="M15 18l-6-6 6-6" />
       </svg>
     </button>
     <div class="lightbox-content">
@@ -286,16 +315,26 @@
       <div class="lightbox-info">
         <span id="lightbox-name" class="lightbox-name"></span>
         <span id="lightbox-dims" class="lightbox-dims"></span>
+        <span id="lightbox-cat" class="lightbox-cat-badge hidden"></span>
+        <button id="lightbox-change-cat" class="btn btn-primary btn-sm">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"></path>
+            <polygon points="18 2 22 6 12 16 8 16 8 12 18 2"></polygon>
+          </svg>
+          Catégorie
+        </button>
         <button id="lightbox-download" class="btn btn-ghost btn-sm">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
           Télécharger
         </button>
         <button id="lightbox-delete" class="btn btn-danger btn-sm">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14H6L5 6" />
           </svg>
           Supprimer
         </button>
@@ -303,7 +342,7 @@
     </div>
     <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Suivant">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M9 18l6-6-6-6"/>
+        <path d="M9 18l6-6-6-6" />
       </svg>
     </button>
   </div>
@@ -316,7 +355,8 @@
         <h3 id="cat-modal-title">Nouvelle catégorie</h3>
         <button class="modal-close" id="cat-modal-close" aria-label="Fermer">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>
@@ -368,9 +408,38 @@
     </div>
   </div>
 
+  <!-- ── Change Category Modal ─────────────────────────────────────────── -->
+  <div id="change-cat-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-overlay" id="change-cat-modal-overlay"></div>
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 id="change-cat-title">Changer la catégorie</h3>
+        <button class="modal-close" id="change-cat-close" aria-label="Fermer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="change-cat-select">Nouvelle catégorie</label>
+          <select id="change-cat-select" class="form-select">
+            <option value="">— Sans catégorie —</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="change-cat-cancel" class="btn btn-ghost">Annuler</button>
+        <button id="change-cat-save" class="btn btn-primary">Déplacer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Toast ─────────────────────────────────────────────────── -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="/app.js"></script>
 </body>
+
 </html>

@@ -10,7 +10,7 @@ const fs = require('fs');
 const https = require('https');
 const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
-const mongoose = require('mongoose');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,29 +33,25 @@ const useCloudinary = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDI
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-// ─── MongoDB Setup ────────────────────────────────────────────────────────────
-const MONGODB_URI = process.env.MONGODB_URI;
-let useMongo = false;
-let AppData;
+// ─── Supabase Setup ───────────────────────────────────────────────────────────
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+let supabase = null;
 
-if (MONGODB_URI) {
-  mongoose.connect(MONGODB_URI).then(() => {
-    console.log('✅ Connecté à MongoDB');
-    useMongo = true;
-    const schema = new mongoose.Schema({ data: Object }, { strict: false });
-    AppData = mongoose.model('AppData', schema);
-  }).catch(err => {
-    console.error('❌ Erreur MongoDB, fallback JSON activé:', err.message);
-  });
+if (SUPABASE_URL && SUPABASE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  console.log('✅ Connecté à Supabase');
+} else {
+  console.log('❌ Supabase non configuré, fallback JSON activé');
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 async function readDB() {
-  if (useMongo && AppData) {
+  if (supabase) {
     try {
-      const doc = await AppData.findOne();
-      if (doc && doc.data) return doc.data;
-    } catch (e) { console.error('Erreur lecture MongoDB', e); }
+      const { data, error } = await supabase.from('app_data').select('data').eq('id', 1).single();
+      if (!error && data && data.data) return data.data;
+    } catch (e) { console.error('Erreur lecture Supabase', e); }
     return { categories: [], photos: [] };
   }
 
@@ -67,14 +63,14 @@ async function readDB() {
   }
 }
 
-async function writeDB(data) {
-  if (useMongo && AppData) {
+async function writeDB(dbData) {
+  if (supabase) {
     try {
-      await AppData.findOneAndUpdate({}, { data }, { upsert: true });
+      await supabase.from('app_data').upsert({ id: 1, data: dbData });
       return;
-    } catch (e) { console.error('Erreur écriture MongoDB', e); }
+    } catch (e) { console.error('Erreur écriture Supabase', e); }
   }
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  fs.writeFileSync(DATA_FILE, JSON.stringify(dbData, null, 2));
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────

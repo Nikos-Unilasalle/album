@@ -56,7 +56,11 @@ function showLoginScreen() {
     $('app').classList.add('hidden');
 }
 
-function showApp() {
+function showApp(role = 'admin') {
+    state.userRole = role;
+    document.body.classList.remove('role-admin', 'role-viewer');
+    document.body.classList.add(`role-${role}`);
+    
     $('login-screen').classList.add('hidden');
     $('app').classList.remove('hidden');
 }
@@ -78,7 +82,7 @@ $('login-form').addEventListener('submit', async e => {
         });
         const data = await res.json();
         if (res.ok) {
-            showApp();
+            showApp(data.role || 'admin');
             await loadAll();
         } else {
             errEl.classList.remove('hidden');
@@ -833,7 +837,7 @@ $('lightbox-change-cat').addEventListener('click', () => {
     try {
         const auth = await fetch('/api/auth/check').then(r => r.json());
         if (auth.authenticated) {
-            showApp();
+            showApp(auth.role || 'admin');
             await loadAll();
         }
         // else: login screen is already shown by default

@@ -96,6 +96,20 @@ a {
   display: none !important;
 }
 
+/* ── Role Based Visibility ───────────────────────── */
+body.role-viewer .nav-item[data-view="upload"],
+body.role-viewer .nav-item[data-view="categories"],
+body.role-viewer .photo-action-btn.danger,
+body.role-viewer .photo-action-btn[data-action="cat"],
+body.role-viewer #btn-delete-selected,
+body.role-viewer #btn-change-cat-selected,
+body.role-viewer #btn-new-category,
+body.role-viewer .cat-actions,
+body.role-viewer #lightbox-delete,
+body.role-viewer #lightbox-change-cat {
+  display: none !important;
+}
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    LOGIN
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 const PASSWORD = process.env.APP_PASSWORD || 'apex2024';
+const VIEWER_PASSWORD = process.env.VIEWER_PASSWORD || 'photo60';
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const MAX_WIDTH = 1920;
@@ -122,6 +123,11 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Non authentifié' });
 }
 
+function requireAdmin(req, res, next) {
+  if (req.session && req.session.authenticated && req.session.role === 'admin') return next();
+  res.status(403).json({ error: 'Action non autorisée (mode spectateur)' });
+}
+
 // ─── Multer config ────────────────────────────────────────────────────────────
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -143,7 +149,12 @@ app.post('/api/login', (req, res) => {
   const { password } = req.body;
   if (password === PASSWORD) {
     req.session.authenticated = true;
-    res.json({ success: true });
+    req.session.role = 'admin';
+    res.json({ success: true, role: 'admin' });
+  } else if (password === VIEWER_PASSWORD) {
+    req.session.authenticated = true;
+    req.session.role = 'viewer';
+    res.json({ success: true, role: 'viewer' });
   } else {
     res.status(401).json({ error: 'Mot de passe incorrect' });
   }
@@ -155,7 +166,10 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/auth/check', (req, res) => {
-  res.json({ authenticated: !!(req.session && req.session.authenticated) });
+  res.json({ 
+    authenticated: !!(req.session && req.session.authenticated),
+    role: req.session ? req.session.role : null
+  });
 });
 
 // ─── Categories routes ────────────────────────────────────────────────────────
@@ -202,7 +216,7 @@ app.put('/api/categories/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/categories/:id', requireAuth, async (req, res) => {
+app.delete('/api/categories/:id', requireAdmin, async (req, res) => {
   try {
     const db = await readDB();
     const catId = req.params.id;
@@ -365,7 +379,7 @@ async function removePhoto(photo) {
   }
 }
 
-app.delete('/api/photos/:id', requireAuth, async (req, res) => {
+app.delete('/api/photos/:id', requireAdmin, async (req, res) => {
   try {
     const db = await readDB();
     const photo = db.photos.find(p => p.id === req.params.id);
@@ -380,7 +394,7 @@ app.delete('/api/photos/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/photos', requireAuth, async (req, res) => {
+app.delete('/api/photos', requireAdmin, async (req, res) => {
   const { ids } = req.body;
   try {
     const db = await readDB();

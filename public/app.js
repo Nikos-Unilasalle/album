@@ -424,12 +424,17 @@ function updateLightbox() {
     $('lightbox-name').textContent = photo.originalName;
     $('lightbox-dims').textContent = photo.width && photo.height ? `${photo.width} × ${photo.height}px` : '';
 
-    const cat = state.categories.find(c => c.id === photo.categoryId);
+    const photoCatIds = photo.categoryIds || (photo.categoryId ? [photo.categoryId] : []);
+    const photoCats = photoCatIds.map(id => state.categories.find(c => c.id === id)).filter(Boolean);
     const catEl = $('lightbox-cat');
-    if (cat) {
-        catEl.innerHTML = `<span class="chip-dot" style="background:${cat.color}"></span>${escHtml(cat.name)}`;
+    
+    if (photoCats.length > 0) {
+        catEl.innerHTML = photoCats.map(cat => 
+            `<span class="filter-chip mini"><span class="chip-dot" style="background:${cat.color}"></span>${escHtml(cat.name)}</span>`
+        ).join(' ');
         catEl.classList.remove('hidden');
     } else {
+        catEl.innerHTML = '';
         catEl.classList.add('hidden');
     }
 

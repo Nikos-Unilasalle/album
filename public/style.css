@@ -668,6 +668,13 @@ body.role-viewer #lightbox-change-cat {
   color: var(--text-primary);
 }
 
+.filter-chip.mini {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  background: var(--bg-hover);
+  cursor: default;
+}
+
 .filter-chip.active {
   background: var(--accent-glow);
   color: #c7d2fe;

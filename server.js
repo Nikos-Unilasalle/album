@@ -221,10 +221,10 @@ app.delete('/api/categories/:id', requireAdmin, async (req, res) => {
     const db = await readDB();
     const catId = req.params.id;
     db.categories = db.categories.filter(c => c.id !== catId);
-    db.photos = db.photos.map(p => ({
-      ...p,
-      categoryId: p.categoryId === catId ? null : p.categoryId
-    }));
+    db.photos = db.photos.map(p => {
+      const categoryIds = (p.categoryIds || (p.categoryId ? [p.categoryId] : [])).filter(id => id !== catId);
+      return { ...p, categoryIds, categoryId: categoryIds[0] || null };
+    });
     await writeDB(db);
     res.json({ success: true });
   } catch (e) {
@@ -243,7 +243,12 @@ app.get('/api/photos', requireAuth, async (req, res) => {
 });
 
 app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (req, res) => {
-  const { categoryId } = req.body;
+  let { categoryId, categoryIds } = req.body;
+  if (!categoryIds) {
+    categoryIds = categoryId ? (Array.isArray(categoryId) ? categoryId : [categoryId]) : [];
+  } else if (!Array.isArray(categoryIds)) {
+    categoryIds = [categoryIds];
+  }
   let db;
   try {
     db = await readDB();
@@ -310,7 +315,8 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
         thumbFilename: photoThumbFilename || thumbFilename,
         cloudinaryId,
         originalName: file.originalname,
-        categoryId: categoryId || null,
+        categoryIds: categoryIds,
+        categoryId: categoryIds[0] || null, // Legacy support
         width: finalMeta.width,
         height: finalMeta.height,
         size: photoSize,

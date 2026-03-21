@@ -151,8 +151,8 @@ async function loadAll() {
 // ── Gallery ───────────────────────────────────────────────────────────────────
 function getFilteredPhotos() {
     if (state.activeFilter === 'all') return state.photos;
-    if (state.activeFilter === '__none__') return state.photos.filter(p => !p.categoryId);
-    return state.photos.filter(p => p.categoryId === state.activeFilter);
+    if (state.activeFilter === '__none__') return state.photos.filter(p => !p.categoryIds || p.categoryIds.length === 0);
+    return state.photos.filter(p => (p.categoryIds || []).includes(state.activeFilter));
 }
 
 function renderFilterBar() {
@@ -163,7 +163,7 @@ function renderFilterBar() {
     bar.appendChild(allChip);
 
     // "No category"
-    const noneCount = state.photos.filter(p => !p.categoryId).length;
+    const noneCount = state.photos.filter(p => !p.categoryIds || p.categoryIds.length === 0).length;
     if (noneCount > 0) {
         const chip = el('button', `filter-chip${state.activeFilter === '__none__' ? ' active' : ''}`);
         chip.dataset.cat = '__none__';
@@ -173,7 +173,7 @@ function renderFilterBar() {
     }
 
     state.categories.forEach(cat => {
-        const count = state.photos.filter(p => p.categoryId === cat.id).length;
+        const count = state.photos.filter(p => (p.categoryIds || []).includes(cat.id)).length;
         const chip = el('button', `filter-chip${state.activeFilter === cat.id ? ' active' : ''}`);
         chip.dataset.cat = cat.id;
         chip.innerHTML = `<span class="chip-dot" style="background:${cat.color}"></span>${cat.name} <span style="opacity:.5;font-size:.75em">${count}</span>`;
@@ -214,13 +214,19 @@ function renderGallery() {
 }
 
 function createPhotoCard(photo, idx) {
-    const cat = state.categories.find(c => c.id === photo.categoryId);
+    const photoCatIds = photo.categoryIds || (photo.categoryId ? [photo.categoryId] : []);
+    const photoCats = photoCatIds.map(id => state.categories.find(c => c.id === id)).filter(Boolean);
     const isSelected = state.selectedPhotos.has(photo.id);
     const thumbSrc = (photo.thumbFilename || photo.filename).startsWith('http') ? (photo.thumbFilename || photo.filename) : `/uploads/${photo.thumbFilename || photo.filename}`;
 
     const card = el('div', `photo-card${isSelected ? ' selected' : ''}`);
     card.dataset.id = photo.id;
     card.dataset.idx = idx;
+
+    let catBadges = '';
+    photoCats.forEach((cat, i) => {
+        catBadges += `<span class="photo-cat-badge" style="background:${cat.color}; right:${8 + (i * 12)}px" title="${escHtml(cat.name)}"></span>`;
+    });
 
     card.innerHTML = `
     <img src="${thumbSrc}" alt="${escHtml(photo.originalName)}" loading="lazy" />
@@ -229,7 +235,7 @@ function createPhotoCard(photo, idx) {
         <polyline points="20 6 9 17 4 12"/>
       </svg>
     </div>
-    ${cat ? `<span class="photo-cat-badge" style="background:${cat.color}" title="${escHtml(cat.name)}"></span>` : ''}
+    ${catBadges}
     <div class="photo-overlay">
       <span class="photo-name">${escHtml(photo.originalName)}</span>
       <div class="photo-actions-row">
@@ -472,13 +478,16 @@ $('lightbox').addEventListener('touchend', e => {
 
 // ── Upload ────────────────────────────────────────────────────────────────────
 function populateUploadCategories() {
-    const sel = $('upload-category');
-    sel.innerHTML = '<option value="">— Sans catégorie —</option>';
+    const container = $('upload-categories-list');
+    container.innerHTML = '';
     state.categories.forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat.id;
-        opt.textContent = cat.name;
-        sel.appendChild(opt);
+        const item = el('label', 'checkbox-item');
+        item.innerHTML = `
+            <input type="checkbox" name="upload-cats" value="${cat.id}">
+            <span class="checkbox-box"></span>
+            <span class="checkbox-label">${escHtml(cat.name)}</span>
+        `;
+        container.appendChild(item);
     });
 }
 
@@ -585,7 +594,7 @@ $('btn-upload').addEventListener('click', async () => {
     const pending = state.uploadQueue.filter(q => q.status === 'pending');
     if (!pending.length) return;
 
-    const catId = $('upload-category').value;
+    const checked = Array.from(document.querySelectorAll('input[name="upload-cats"]:checked')).map(i => i.value);
     const btn = $('btn-upload');
     btn.disabled = true;
 
@@ -594,7 +603,7 @@ $('btn-upload').addEventListener('click', async () => {
     for (let i = 0; i < pending.length; i += batchSize) {
         const batch = pending.slice(i, i + batchSize);
         const fd = new FormData();
-        if (catId) fd.append('categoryId', catId);
+        checked.forEach(id => fd.append('categoryIds', id));
         batch.forEach(item => {
             item.status = 'uploading';
             updateQueueItemStatus(item);
@@ -760,24 +769,28 @@ let targetPhotosToChangeCat = [];
 
 function openChangeCatModal(photoIds) {
     targetPhotosToChangeCat = photoIds;
-    const sel = $('change-cat-select');
-    sel.innerHTML = '<option value="">— Sans catégorie —</option>';
-    state.categories.forEach(cat => {
-        const opt = document.createElement('option');
-        opt.value = cat.id;
-        opt.textContent = cat.name;
-        sel.appendChild(opt);
-    });
-
+    const container = $('change-cat-list');
+    container.innerHTML = '';
+    
+    let currentIds = [];
     if (photoIds.length === 1) {
         const photo = state.photos.find(p => p.id === photoIds[0]);
-        if (photo && photo.categoryId) sel.value = photo.categoryId;
-        else sel.value = '';
-        $('change-cat-title').textContent = 'Changer la catégorie';
+        currentIds = photo.categoryIds || (photo.categoryId ? [photo.categoryId] : []);
+        $('change-cat-title').textContent = 'Modifier les catégories';
     } else {
-        sel.value = '';
-        $('change-cat-title').textContent = `Déplacer ${photoIds.length} photo${photoIds.length > 1 ? 's' : ''}`;
+        $('change-cat-title').textContent = `Modifier ${photoIds.length} photos`;
     }
+
+    state.categories.forEach(cat => {
+        const item = el('label', 'checkbox-item');
+        const checked = currentIds.includes(cat.id);
+        item.innerHTML = `
+            <input type="checkbox" name="change-cats" value="${cat.id}" ${checked ? 'checked' : ''}>
+            <span class="checkbox-box"></span>
+            <span class="checkbox-label">${escHtml(cat.name)}</span>
+        `;
+        container.appendChild(item);
+    });
 
     $('change-cat-modal').classList.remove('hidden');
 }
@@ -792,7 +805,7 @@ $('change-cat-cancel').addEventListener('click', closeChangeCatModal);
 $('change-cat-modal-overlay').addEventListener('click', closeChangeCatModal);
 
 $('change-cat-save').addEventListener('click', async () => {
-    const newCatId = $('change-cat-select').value || null;
+    const newCatIds = Array.from(document.querySelectorAll('input[name="change-cats"]:checked')).map(i => i.value);
     const ids = targetPhotosToChangeCat;
     if (!ids.length) return;
 
@@ -801,11 +814,14 @@ $('change-cat-save').addEventListener('click', async () => {
     btn.textContent = 'En cours...';
 
     try {
-        await Promise.all(ids.map(id => api('PUT', `/api/photos/${id}`, { categoryId: newCatId })));
+        await Promise.all(ids.map(id => api('PUT', `/api/photos/${id}`, { categoryIds: newCatIds, categoryId: newCatIds[0] || null })));
 
         ids.forEach(id => {
             const idx = state.photos.findIndex(p => p.id === id);
-            if (idx !== -1) state.photos[idx].categoryId = newCatId;
+            if (idx !== -1) {
+                state.photos[idx].categoryIds = newCatIds;
+                state.photos[idx].categoryId = newCatIds[0] || null;
+            }
         });
 
         toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} déplacée${ids.length > 1 ? 's' : ''}`, 'success');

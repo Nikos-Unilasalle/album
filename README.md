@@ -12,7 +12,7 @@ Album Apex est une plateforme d'échange de photos privée, pensée pour la simp
 - ✅ **Sélection multiple** — Pratique pour modifier les catégories en lot, supprimer ou télécharger de multiples fichiers.
 - 📦 **Téléchargement groupé** — Récupérez une sélection entière sous la forme d'un seul fichier `.zip`.
 - 🔭 **Visionneuse (Lightbox)** — Mode plein écran avec navigation au clavier et support du glissement (swipe) sur mobile.
-- ☁️ **Stockage Externe (Optionnel)** — Intégration possible et facile avec Cloudinary (pour les images) et Supabase (pour la sauvegarde des données). Note : si non configurés, l'application fonctionne par défaut avec un stockage local !
+- ☁️ **Hébergement des photos (Recommandé)** — Intégration native et optimisée avec **Cloudinary**, un service externe gratuit et très pratique pour stocker vos photos de façon permanente (sans saturer votre propre serveur !), couplé à **Supabase** pour la base de données. Note : si non configurés, l'application bascule automatiquement sur un hébergement local.
 
 ## Installation Locale 💻
 
@@ -67,7 +67,7 @@ Pour sécuriser et paramétrer votre instance, il est recommandé de créer un f
 4. Ajoutez vos **Variables d'environnement** (le mot de passe admin, visiteur, etc.) dans l'interface de votre hébergeur.
 5. Déployez !
 
-> ⚠️ **Note importante sur le stockage** : Chez de nombreux hébergeurs gratuits (comme Render *free tier*), le stockage local est temporaire et **éphémère**. Les images téléchargées en local seront alors perdues à chaque redémarrage du serveur. **Pour un usage en production**, configurez vos espaces cloud en renseignant les variables `CLOUDINARY_*` et `SUPABASE_*` décrites ci-dessus.
+> ⚠️ **Note importante sur le stockage** : Chez de nombreux hébergeurs gratuits (comme Render *free tier*), le stockage local principal est temporaire et **éphémère**. Vos photos risqueraient d'être supprimées à chaque redémarrage du serveur. C'est exactement pour cela que nous utilisons et recommandons **Cloudinary** : c'est un service d'hébergement d'images gratuit très pratique qui garantit la pérennité de votre galerie photo. Pour en bénéficier en production, il vous suffit de renseigner les variables `CLOUDINARY_*` et `SUPABASE_*` décrites ci-dessus.
 
 ## Stack Technique 🛠️
 

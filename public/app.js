@@ -830,6 +830,10 @@ $('change-cat-save').addEventListener('click', async () => {
         });
 
         toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} déplacée${ids.length > 1 ? 's' : ''}`, 'success');
+        
+        state.selectedPhotos.clear();
+        updateSelectionUI();
+
         closeChangeCatModal();
         renderFilterBar();
         renderGallery();

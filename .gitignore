@@ -4,3 +4,4 @@ uploads/*
 data/db.json
 .env
 *.log
+secrets-memo.md

@@ -258,7 +258,8 @@ function createPhotoCard(photo, idx) {
     ${prefsHtml}
     ${catBadges}
     <div class="photo-overlay">
-      <div class="photo-prefs-quick" style="display:flex; gap:4px; margin-bottom: auto;">
+      <div style="flex-grow: 1;"></div>
+      <div class="photo-prefs-quick" style="display:inline-flex; gap:4px; margin-bottom: 8px; padding: 4px; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); border-radius: 20px; width: max-content;">
         <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="star" title="Étoile">${prefIcons.star}</button>
         <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="heart" title="Cœur">${prefIcons.heart}</button>
         <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="skull" title="Tête de mort">${prefIcons.skull}</button>

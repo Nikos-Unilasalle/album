@@ -518,6 +518,17 @@ function updateLightbox() {
     $('lightbox-name').textContent = photo.originalName;
     $('lightbox-dims').textContent = photo.width && photo.height ? `${photo.width} × ${photo.height}px` : '';
 
+    // Show current preference icon (Point 1)
+    const currentPref = (photo.preferences && state.userId) ? photo.preferences[state.userId] : null;
+    const currentEl = $('lightbox-current-pref');
+    if (currentPref) {
+        currentEl.innerHTML = prefIcons[currentPref];
+        currentEl.classList.remove('hidden');
+    } else {
+        currentEl.innerHTML = '';
+        currentEl.classList.add('hidden');
+    }
+
     const photoCatIds = photo.categoryIds || (photo.categoryId ? [photo.categoryId] : []);
     const photoCats = photoCatIds.map(id => state.categories.find(c => c.id === id)).filter(Boolean);
     const catEl = $('lightbox-cat');
@@ -537,7 +548,7 @@ function updateLightbox() {
     // Update PrefPicker
     const prefEl = $('lightbox-prefs-picker');
     prefEl.innerHTML = '';
-    const currentPref = (photo.preferences && state.userId) ? photo.preferences[state.userId] : null;
+    // currentPref is already declared above
     ['star', 'heart', 'skull', 'check'].forEach(icon => {
         const btn = el('button', `pref-btn ${currentPref === icon ? 'active' : ''}`);
         btn.innerHTML = prefIcons[icon];
@@ -913,7 +924,7 @@ $('change-cat-save')?.addEventListener('click', async () => {
     btn.textContent = 'En cours...';
 
     try {
-        await Promise.all(ids.map(id => api('PUT', `/api/photos/${id}`, { categoryIds: newCatIds, categoryId: newCatIds[0] || null })));
+        await api('PUT', '/api/photos-bulk', { ids, updates: { categoryIds: newCatIds, categoryId: newCatIds[0] || null } });
         ids.forEach(id => {
             const idx = state.photos.findIndex(p => p.id === id);
             if (idx !== -1) {

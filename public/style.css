@@ -1767,3 +1767,16 @@ body.role-viewer .nav-admin-only {
   background: rgba(255,255,255,0.3);
   transform: scale(1.1);
 }
+
+.lightbox-current-pref {
+  display: flex;
+  align-items: center;
+  margin: 0 10px;
+}
+.lightbox-current-pref svg {
+  width: 24px;
+  height: 24px;
+}
+.photo-prefs {
+  display: flex !important; /* Ensure always rendered if data exists */
+}

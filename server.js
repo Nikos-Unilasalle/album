@@ -346,6 +346,26 @@ app.put('/api/photos/:id', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/photos-bulk', requireAuth, async (req, res) => {
+  const { ids, updates } = req.body;
+  if (!ids || !updates) return res.status(400).json({ error: 'Données manquantes' });
+  try {
+    const db = await readDB();
+    let count = 0;
+    db.photos = db.photos.map(p => {
+      if (ids.includes(p.id)) {
+        if (req.session.role === 'admin' || p.uploadedBy === req.session.userId) {
+          count++;
+          return { ...p, ...updates, id: p.id };
+        }
+      }
+      return p;
+    });
+    await writeDB(db);
+    res.json({ success: true, count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/photos/:id/preference', requireAuth, async (req, res) => {
   const { icon } = req.body;
   try {

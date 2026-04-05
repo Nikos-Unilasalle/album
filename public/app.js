@@ -258,6 +258,12 @@ function createPhotoCard(photo, idx) {
     ${prefsHtml}
     ${catBadges}
     <div class="photo-overlay">
+      <div class="photo-prefs-quick" style="display:flex; gap:4px; margin-bottom: auto;">
+        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="star" title="Étoile">${prefIcons.star}</button>
+        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="heart" title="Cœur">${prefIcons.heart}</button>
+        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="skull" title="Tête de mort">${prefIcons.skull}</button>
+        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="check" title="Coche">${prefIcons.check}</button>
+      </div>
       <span class="photo-name">${escHtml(photo.originalName)}</span>
       <div class="photo-actions-row">
         <button class="photo-action-btn" data-action="cat" title="Changer la catégorie" aria-label="Changer la catégorie">
@@ -281,6 +287,12 @@ function createPhotoCard(photo, idx) {
     </div>
   `;
 
+    const currentPref = (photo.preferences && state.userId) ? photo.preferences[state.userId] : null;
+    if (currentPref) {
+       const btn = card.querySelector(`[data-icon="${currentPref}"]`);
+       if (btn) btn.classList.add('active');
+    }
+
     card.addEventListener('click', e => {
         if (e.target.closest('[data-action]')) return;
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -290,6 +302,25 @@ function createPhotoCard(photo, idx) {
         } else {
             openLightbox(idx);
         }
+    });
+
+    card.querySelectorAll('[data-action="pref"]').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            e.stopPropagation();
+            const icon = btn.dataset.icon;
+            const current = (photo.preferences && state.userId) ? photo.preferences[state.userId] : null;
+            const newIcon = current === icon ? null : icon;
+            try {
+                const updatedPhoto = await api('POST', `/api/photos/${photo.id}/preference`, { icon: newIcon });
+                if (updatedPhoto) {
+                    const i = state.photos.findIndex(p => p.id === photo.id);
+                    if (i !== -1) state.photos[i] = updatedPhoto;
+                    renderGallery();
+                }
+            } catch (err) {
+                toast("Erreur", "error");
+            }
+        });
     });
 
     card.querySelector('.photo-check').addEventListener('click', e => {

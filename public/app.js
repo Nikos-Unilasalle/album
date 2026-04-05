@@ -259,11 +259,11 @@ function createPhotoCard(photo, idx) {
     ${catBadges}
     <div class="photo-overlay">
       <div style="flex-grow: 1;"></div>
-      <div class="photo-prefs-quick" style="display:inline-flex; gap:4px; margin-bottom: 8px; padding: 4px; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); border-radius: 20px; width: max-content;">
-        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="star" title="Étoile">${prefIcons.star}</button>
-        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="heart" title="Cœur">${prefIcons.heart}</button>
-        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="skull" title="Tête de mort">${prefIcons.skull}</button>
-        <button class="pref-btn" style="width:24px; height:24px;" data-action="pref" data-icon="check" title="Coche">${prefIcons.check}</button>
+      <div class="photo-prefs-quick" style="display:flex; justify-content:center; gap:8px; margin-bottom: 12px; padding: 6px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border-radius: 99px; width: 100%; max-width: 160px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);">
+        <button class="pref-btn" style="width:28px; height:28px;" data-action="pref" data-icon="star" title="Étoile">${prefIcons.star}</button>
+        <button class="pref-btn" style="width:28px; height:28px;" data-action="pref" data-icon="heart" title="Cœur">${prefIcons.heart}</button>
+        <button class="pref-btn" style="width:28px; height:28px;" data-action="pref" data-icon="skull" title="Tête de mort">${prefIcons.skull}</button>
+        <button class="pref-btn" style="width:28px; height:28px;" data-action="pref" data-icon="check" title="Coche">${prefIcons.check}</button>
       </div>
       <span class="photo-name">${escHtml(photo.originalName)}</span>
       <div class="photo-actions-row">

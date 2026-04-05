@@ -1729,9 +1729,10 @@ body.role-viewer .nav-admin-only {
 .photo-prefs {
   position: absolute;
   top: 8px;
-  right: 8px;
+  left: 36px;
   display: flex;
   gap: 4px;
+  z-index: 2;
 }
 
 .pref-icon-display {

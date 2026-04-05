@@ -178,15 +178,22 @@
             <div class="selection-actions hidden" id="selection-bar">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="selection-badge" id="selected-count">0</span>
-                <button id="btn-download-selected" class="btn btn-ghost btn-sm">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Télécharger
-                </button>
-                <div style="display: flex; gap: 2px;">
+              <button id="btn-download-selected" class="btn btn-ghost btn-sm">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Télécharger
+              </button>
+              <button id="btn-share-selected" class="btn btn-ghost btn-sm" title="Partager la sélection"
+                style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:4px">
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+                </svg>
+                Partager
+              </button>
+              <div style="display: flex; gap: 2px;">
                   <button id="btn-contact-sheet" class="btn btn-ghost btn-sm" title="Générer une planche contact"
                     style="background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);">
                     Planche contact !
@@ -588,7 +595,33 @@
     </div>
   </div>
 
-  <script src="/app.js?v=1.5"></script>
+  <!-- ── Share Modal ────────────────────────────────────────────────── -->
+  <div id="share-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-overlay" id="share-modal-overlay"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Lien de partage</h3>
+        <button class="modal-close" id="share-modal-close" aria-label="Fermer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style="text-align: center; padding: 20px 0;">
+          <p style="margin-bottom: 20px; color: #94a3b8;">Voici le lien unique pour accéder à cette sélection :</p>
+          <div class="input-group" style="flex-direction:row; gap:8px;">
+              <input type="text" id="share-url" readonly style="flex:1; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.9rem;">
+              <button class="btn btn-primary" id="btn-copy-share" style="padding: 0 20px;">Copier</button>
+          </div>
+          <div id="share-qr-container" style="margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+              <div id="share-qr-img" style="background: white; padding: 10px; border-radius: 8px; min-height: 150px; width: 170px; display: flex; align-items: center; justify-content: center;">
+                  <!-- QRCode injected here -->
+              </div>
+              <span style="font-size: 0.8rem; opacity: 0.6;">Scannez pour voir sur mobile</span>
+          </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=1.6"></script>
 </body>
 
 </html>

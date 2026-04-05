@@ -75,10 +75,13 @@ function showLoginScreen() {
     $('app').classList.add('hidden');
 }
 
-function showApp(role = 'admin', userId = null, username = null) {
+function showApp(role = 'admin', userId = null, username = null, settings = null) {
     state.userRole = role;
     state.userId = userId;
     state.username = username;
+    if (settings && settings.contactSheetSettings) {
+        state.contactSheetSettings = { ...state.contactSheetSettings, ...settings.contactSheetSettings };
+    }
     document.body.className = `role-${role}`;
     
     $('login-screen').classList.add('hidden');
@@ -103,7 +106,7 @@ $('login-form').addEventListener('submit', async e => {
         });
         const data = await res.json();
         if (res.ok) {
-            showApp(data.role || 'admin', data.userId, data.username);
+            showApp(data.role || 'admin', data.userId, data.username, data.settings);
             await loadAll();
         } else {
             errEl.classList.remove('hidden');
@@ -475,9 +478,9 @@ $('cs-modal-close')?.addEventListener('click', () => $('cs-modal').classList.add
 $('cs-cancel-btn')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
 $('cs-modal-overlay')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
 
-$('cs-form')?.addEventListener('submit', e => {
+$('cs-form')?.addEventListener('submit', async e => {
     e.preventDefault();
-    state.contactSheetSettings = {
+    const settings = {
         width: parseInt($('cs-width').value),
         height: parseInt($('cs-height').value),
         gap: parseInt($('cs-gap').value),
@@ -485,9 +488,43 @@ $('cs-form')?.addEventListener('submit', e => {
         backgroundColor: $('cs-bg-color').value,
         borderColor: $('cs-border-color').value
     };
-    $('cs-modal').classList.add('hidden');
-    toast('Réglages enregistrés localement', 'success');
+    state.contactSheetSettings = settings;
+    try {
+        await api('PUT', '/api/users/settings', { contactSheetSettings: settings });
+        $('cs-modal').classList.add('hidden');
+        toast('Réglages enregistrés', 'success');
+    } catch { toast('Erreur de sauvegarde des réglages', 'error'); }
 });
+
+// ── Share ────────────────────────────────────────────────────────────────────
+$('btn-share-selected')?.addEventListener('click', async () => {
+    const ids = Array.from(state.selectedPhotos);
+    if (!ids.length) return;
+    const btn = $('btn-share-selected');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Génération...';
+
+    try {
+        const share = await api('POST', '/api/shares', { photoIds: ids });
+        if (share && share.id) {
+            const url = `${window.location.origin}/share/${share.id}`;
+            $('share-url').value = url;
+            $('share-qr-img').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=150x150" alt="QRCode" />`;
+            $('share-modal').classList.remove('hidden');
+        }
+    } catch { toast('Erreur lors du partage', 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = origHtml; }
+});
+
+$('btn-copy-share')?.addEventListener('click', () => {
+    $('share-url').select();
+    document.execCommand('copy');
+    toast('Lien copié !', 'success');
+});
+
+$('share-modal-close')?.addEventListener('click', () => $('share-modal').classList.add('hidden'));
+$('share-modal-overlay')?.addEventListener('click', () => $('share-modal').classList.add('hidden'));
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 function confirmDelete(ids, label = 'ces éléments') {

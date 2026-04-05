@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photos partagées — Album Apex</title>
+    <link rel="stylesheet" href="/style.css?v=1.3">
+    <style>
+        body { background: #0f172a; display: flex; flex-direction: column; min-height: 100vh; margin: 0; }
+        .share-header { padding: 2rem 5%; background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .share-logo { font-size: 1.5rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .share-logo span { color: #6366f1; }
+        .share-container { flex: 1; padding: 2rem 5%; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        .photo-card { border-radius: 12px; overflow: hidden; background: #1e293b; aspect-ratio: 4/5; position: relative; }
+        .photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
+        .photo-card:hover img { transform: scale(1.05); }
+        .photo-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 1.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.8)); opacity: 1; display: flex; align-items: flex-end; justify-content: space-between; }
+        .photo-name { color: #fff; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; }
+        .empty-share { text-align: center; margin-top: 100px; opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <header class="share-header">
+        <div class="share-logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            Album<span>Apex</span> — Sélection
+        </div>
+    </header>
+
+    <main class="share-container">
+        <div id="share-grid" class="share-grid"></div>
+        <div id="share-loading" style="text-align:center; padding: 50px;">
+            <p>Chargement de la sélection...</p>
+        </div>
+        <div id="share-empty" class="empty-share hidden">
+            <p>Cette sélection est vide ou n'existe plus.</p>
+        </div>
+    </main>
+
+    <script>
+        const shareId = window.location.pathname.split('/').pop();
+        const grid = document.getElementById('share-grid');
+        const loading = document.getElementById('share-loading');
+        const empty = document.getElementById('share-empty');
+
+        async function loadShare() {
+            try {
+                const res = await fetch(`/api/public/shares/${shareId}`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                loading.classList.add('hidden');
+                
+                if (!data.photos || data.photos.length === 0) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+
+                data.photos.forEach(photo => {
+                    const card = document.createElement('div');
+                    card.className = 'photo-card';
+                    const src = (photo.thumbFilename || photo.filename).startsWith('http') ? (photo.thumbFilename || photo.filename) : `/uploads/${photo.thumbFilename || photo.filename}`;
+                    card.innerHTML = `
+                        <img src="${src}" alt="${photo.originalName}" />
+                        <div class="photo-overlay">
+                            <span class="photo-name">${photo.originalName}</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (err) {
+                loading.classList.add('hidden');
+                empty.classList.remove('hidden');
+            }
+        }
+        loadShare();
+    </script>
+</body>
+</html>

@@ -147,18 +147,34 @@ app.post('/api/login', async (req, res) => {
     req.session.role = user.role;
     req.session.userId = user.id;
     req.session.username = user.username;
-    res.json({ success: true, role: user.role, userId: user.id, username: user.username });
+    res.json({ success: true, role: user.role, userId: user.id, username: user.username, settings: user.settings || null });
   } else {
     // legacy fallback
     if (username === 'admin' && password === PASSWORD && db.users.length === 0) {
-       req.session.authenticated = true;
-       req.session.role = 'admin';
-       req.session.userId = 'admin';
-       req.session.username = 'admin';
-       return res.json({ success: true, role: 'admin', username: 'admin' });
+      req.session.authenticated = true;
+      req.session.role = 'admin';
+      req.session.userId = '00000000-0000-0000-0000-000000000000';
+      req.session.username = 'admin';
+      res.json({ success: true, role: 'admin', userId: req.session.userId, username: 'admin', settings: null });
+      return;
     }
     res.status(401).json({ error: 'Identifiants incorrects' });
   }
+});
+
+app.put('/api/users/settings', requireAuth, async (req, res) => {
+  try {
+    const db = await readDB();
+    const userId = req.session.userId;
+    const idx = db.users.findIndex(u => u.id === userId);
+    if (idx !== -1) {
+        db.users[idx].settings = { ...(db.users[idx].settings || {}), ...req.body };
+        await writeDB(db);
+        res.json({ success: true, settings: db.users[idx].settings });
+    } else {
+        res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -567,7 +583,39 @@ app.post('/api/download/bulk', requireAuth, async (req, res) => {
   } catch (e) { if (!res.headersSent) res.status(500).json({ error: e.message }); }
 });
 
+// ─── Share routes ─────────────────────────────────────────────────────────────
+app.post('/api/shares', requireAuth, async (req, res) => {
+  const { photoIds } = req.body;
+  if (!photoIds || !photoIds.length) return res.status(400).json({ error: 'Aucune photo à partager' });
+  try {
+    const db = await readDB();
+    if (!db.shares) db.shares = [];
+    const share = { id: uuidv4().substring(0, 8), photoIds, createdAt: new Date().toISOString(), createdBy: req.session.userId };
+    db.shares.push(share);
+    await writeDB(db);
+    res.json(share);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/public/shares/:id', async (req, res) => {
+  try {
+    const db = await readDB();
+    const share = (db.shares || []).find(s => s.id === req.params.id);
+    if (!share) return res.status(404).json({ error: 'Lien invalide ou expiré' });
+    const photos = db.photos.filter(p => share.photoIds.includes(p.id)).map(p => ({
+        id: p.id,
+        filename: p.filename,
+        thumbFilename: p.thumbFilename,
+        originalName: p.originalName,
+        width: p.width,
+        height: p.height
+    }));
+    res.json({ photos });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Catch-all ────────────────────────────────────────────────────────────────
+app.get('/share/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'share.html')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {

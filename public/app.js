@@ -22,8 +22,15 @@ const state = {
     filteredPhotos: [],
     uploadQueue: [],
     userRole: null,
-    userId: null,
-    username: null
+    username: null,
+    contactSheetSettings: {
+        width: 1200,
+        height: 1600,
+        gap: 24,
+        border: 8,
+        backgroundColor: '#000000',
+        borderColor: '#ffffff'
+    }
 };
 
 // ── DOM Helpers ──────────────────────────────────────────────────────────────
@@ -433,14 +440,14 @@ $('btn-contact-sheet').addEventListener('click', async () => {
         const res = await fetch('/api/photos/contact-sheet', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids })
+            body: JSON.stringify({ ids, options: state.contactSheetSettings })
         });
         if (!res.ok) throw new Error();
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `planche-contact.jpg`;
+        link.download = `planche-contact-${Date.now()}.jpg`;
         link.click();
         URL.revokeObjectURL(url);
         toast('Planche contact générée !', 'success');
@@ -450,6 +457,36 @@ $('btn-contact-sheet').addEventListener('click', async () => {
         btn.disabled = false;
         btn.innerHTML = origHtml;
     }
+});
+
+// ── Contact Sheet Settings Modal ──────────────────────────────────────────────
+$('btn-contact-sheet-settings')?.addEventListener('click', () => {
+    const s = state.contactSheetSettings;
+    $('cs-width').value = s.width;
+    $('cs-height').value = s.height;
+    $('cs-gap').value = s.gap;
+    $('cs-border').value = s.border;
+    $('cs-bg-color').value = s.backgroundColor;
+    $('cs-border-color').value = s.borderColor;
+    $('cs-modal').classList.remove('hidden');
+});
+
+$('cs-modal-close')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
+$('cs-cancel-btn')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
+$('cs-modal-overlay')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
+
+$('cs-form')?.addEventListener('submit', e => {
+    e.preventDefault();
+    state.contactSheetSettings = {
+        width: parseInt($('cs-width').value),
+        height: parseInt($('cs-height').value),
+        gap: parseInt($('cs-gap').value),
+        border: parseInt($('cs-border').value),
+        backgroundColor: $('cs-bg-color').value,
+        borderColor: $('cs-border-color').value
+    };
+    $('cs-modal').classList.add('hidden');
+    toast('Réglages enregistrés localement', 'success');
 });
 
 // ── Delete ────────────────────────────────────────────────────────────────────

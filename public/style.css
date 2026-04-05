@@ -1780,3 +1780,7 @@ body.role-viewer .nav-admin-only {
 .photo-prefs {
   display: flex !important; /* Ensure always rendered if data exists */
 }
+
+.modal-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+input[type="color"] { cursor: pointer; border: none; background: none; }

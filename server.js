@@ -147,7 +147,7 @@ app.post('/api/login', async (req, res) => {
     req.session.role = user.role;
     req.session.userId = user.id;
     req.session.username = user.username;
-    res.json({ success: true, role: user.role, username: user.username });
+    res.json({ success: true, role: user.role, userId: user.id, username: user.username });
   } else {
     // legacy fallback
     if (username === 'admin' && password === PASSWORD && db.users.length === 0) {
@@ -433,7 +433,8 @@ app.delete('/api/photos', requireAuth, async (req, res) => {
 });
 
 app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
-  const { ids } = req.body;
+  const { ids, options } = req.body;
+  const opt = options || {};
   try {
     const db = await readDB();
     const photos = db.photos.filter(p => ids.includes(p.id));
@@ -442,10 +443,12 @@ app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
     db.history.push({ id: uuidv4(), userId: req.session.userId, username: req.session.username, action: 'planche contact', details: `${photos.length} photo(s)`, timestamp: new Date().toISOString() });
     await writeDB(db);
 
-    const WIDTH = 1200;
-    const HEIGHT = 1600;
-    const GAP = 24;
-    const BORDER = 8;
+    const WIDTH = parseInt(opt.width) || 1200;
+    const HEIGHT = parseInt(opt.height) || 1600;
+    const GAP = parseInt(opt.gap) || 24;
+    const BORDER = parseInt(opt.border) || 8;
+    const BG_COLOR = opt.backgroundColor || 'black';
+    const BORDER_COLOR = opt.borderColor || 'white';
 
     let rects = [{x: GAP, y: GAP, w: WIDTH - 2*GAP, h: HEIGHT - 2*GAP}];
     while(rects.length < photos.length) {
@@ -488,13 +491,13 @@ app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
 
         const resized = await sharp(buffer)
            .resize(rw, rh, { fit: 'cover' })
-           .extend({ top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, background: 'white' })
+           .extend({ top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, background: BORDER_COLOR })
            .toBuffer();
            
         composites.push({ input: resized, top: Math.round(rect.y), left: Math.round(rect.x) });
     }
 
-    const contactSheet = await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 4, background: 'black' } })
+    const contactSheet = await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 3, background: BG_COLOR } })
          .composite(composites)
          .jpeg({ quality: 90 })
          .toBuffer();

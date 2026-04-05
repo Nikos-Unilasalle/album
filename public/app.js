@@ -306,13 +306,16 @@ function createPhotoCard(photo, idx) {
 
     card.addEventListener('click', e => {
         if (e.target.closest('[data-action]')) return;
-        if (e.shiftKey || e.ctrlKey || e.metaKey) {
-            toggleSelect(photo.id);
-        } else if (state.selectedPhotos.size > 0) {
+        if (e.shiftKey || e.ctrlKey || e.metaKey || state.selectedPhotos.size > 0) {
             toggleSelect(photo.id);
         } else {
             openLightbox(idx);
         }
+    });
+
+    card.querySelector('.photo-check').addEventListener('click', e => {
+        e.stopPropagation();
+        toggleSelect(photo.id);
     });
 
     card.querySelectorAll('[data-action="pref"]').forEach(btn => {
@@ -332,11 +335,6 @@ function createPhotoCard(photo, idx) {
                 toast("Erreur", "error");
             }
         });
-    });
-
-    card.querySelector('.photo-check').addEventListener('click', e => {
-        e.stopPropagation();
-        toggleSelect(photo.id);
     });
 
     card.querySelector('[data-action="cat"]').addEventListener('click', e => {
@@ -374,8 +372,10 @@ function toggleSelect(id) {
 
 function updateSelectionUI() {
     const count = state.selectedPhotos.size;
-    $('selection-actions').classList.toggle('hidden', count === 0);
-    $('selection-count').textContent = `${count} sélectionnée${count > 1 ? 's' : ''}`;
+    const bar = $('selection-bar');
+    if (bar) bar.classList.toggle('hidden', count === 0);
+    const countEl = $('selected-count');
+    if (countEl) countEl.textContent = `${count} sélectionnée${count > 1 ? 's' : ''}`;
 }
 
 $('btn-clear-selection').addEventListener('click', () => {

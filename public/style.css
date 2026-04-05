@@ -1671,3 +1671,98 @@ body.role-viewer #lightbox-change-cat {
     flex-direction: column;
   }
 }
+/* ── Admin & Users ─────────────────────────────────────────── */
+body.role-user .nav-admin-only,
+body.role-viewer .nav-admin-only {
+  display: none !important;
+}
+
+.list-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.user-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-info { display: flex; flex-direction: column; }
+.user-name { font-weight: 600; font-size: 1rem; }
+.user-role { font-size: 0.8rem; color: var(--text-secondary); text-transform: capitalize; }
+
+.table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.history-table th, .history-table td {
+  padding: 0.8rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-table th {
+  background: var(--bg-elevated);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.history-table tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Preferences Icons */
+.photo-prefs {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.pref-icon-display {
+  width: 22px;
+  height: 22px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.lightbox-prefs-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.pref-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.pref-btn:hover, .pref-btn.active {
+  background: rgba(255,255,255,0.3);
+  transform: scale(1.1);
+}

@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const fetch = require('node-fetch'); // we'll use https natively or dynamic import if node-fetch is missing, but sharp buffer can be fetched easily via native fetch in Node 18+
 const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
 const { createClient } = require('@supabase/supabase-js');
@@ -17,7 +18,6 @@ const PORT = process.env.PORT || 3000;
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 const PASSWORD = process.env.APP_PASSWORD || 'apex2024';
-const VIEWER_PASSWORD = process.env.VIEWER_PASSWORD || 'photo60';
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const DATA_FILE = path.join(__dirname, 'data', 'db.json');
 const MAX_WIDTH = 1920;
@@ -50,52 +50,49 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 async function readDB() {
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('app_data')
-        .select('data')
-        .eq('id', 1)
-        .maybeSingle();
-
+      const { data, error } = await supabase.from('app_data').select('data').eq('id', 1).maybeSingle();
       if (error) {
         console.error('❌ Supabase Read Error:', error.message);
         throw new Error('Supabase Read Error: ' + error.message);
       }
-
-      if (data && data.data) return data.data;
-
-      console.log('ℹ️ No existing data in Supabase app_data table, returning empty defaults');
+      if (data && data.data) {
+          const db = data.data;
+          if (!db.users) db.users = [];
+          if (!db.history) db.history = [];
+          if (db.users.length === 0) {
+              db.users.push({ id: uuidv4(), username: 'admin', password: PASSWORD, role: 'admin' });
+          }
+          return db;
+      }
     } catch (e) {
       console.error('❌ Database Access Exception:', e.message);
-      // We don't want to break the whole app, but we need users to know why images are missing
     }
   }
 
   try {
-    if (!fs.existsSync(DATA_FILE)) return { categories: [], photos: [] };
-    const content = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(content || '{"categories": [], "photos": []}');
+    const fileContent = fs.existsSync(DATA_FILE) ? fs.readFileSync(DATA_FILE, 'utf8') : '';
+    const db = JSON.parse(fileContent || '{"categories": [], "photos": [], "users": [], "history": []}');
+    if (!db.users) db.users = [];
+    if (!db.history) db.history = [];
+    if (db.users.length === 0) {
+        db.users.push({ id: uuidv4(), username: 'admin', password: PASSWORD, role: 'admin' });
+        fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+    }
+    return db;
   } catch (e) {
     console.error('❌ Local File Read Error:', e.message);
-    return { categories: [], photos: [] };
+    return { categories: [], photos: [], users: [], history: [] };
   }
 }
 
 async function writeDB(dbData) {
   if (supabase) {
     try {
-      const { error } = await supabase
-        .from('app_data')
-        .upsert({ id: 1, data: dbData });
-
-      if (error) {
-        console.error('❌ Supabase Write Error:', error.message);
-        // If upsert fails, we still try to write locally as a safety measure
-      } else {
-        return;
-      }
+      const { error } = await supabase.from('app_data').upsert({ id: 1, data: dbData });
+      if (error) console.error('❌ Supabase Write Error:', error.message);
+      else return;
     } catch (e) { console.error('❌ Supabase Write Exception:', e.message); }
   }
-
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(dbData, null, 2));
   } catch (e) {
@@ -105,8 +102,8 @@ async function writeDB(dbData) {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'apex-secret-key-2024',
   resave: false,
@@ -125,7 +122,7 @@ function requireAuth(req, res, next) {
 
 function requireAdmin(req, res, next) {
   if (req.session && req.session.authenticated && req.session.role === 'admin') return next();
-  res.status(403).json({ error: 'Action non autorisée (mode spectateur)' });
+  res.status(403).json({ error: 'Accès refusé' });
 }
 
 // ─── Multer config ────────────────────────────────────────────────────────────
@@ -136,27 +133,32 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|webp|heic|avif/i;
     const isAllowed = allowed.test(path.extname(file.originalname)) || allowed.test(file.mimetype);
-    if (isAllowed) {
-      cb(null, true);
-    } else {
-      cb(new Error('Format non supporté. Utilisez JPG, PNG, GIF, WebP.'));
-    }
+    if (isAllowed) cb(null, true);
+    else cb(new Error('Format non supporté. Utilisez JPG, PNG, GIF, WebP.'));
   }
 });
 
 // ─── Auth routes ──────────────────────────────────────────────────────────────
-app.post('/api/login', (req, res) => {
-  const { password } = req.body;
-  if (password === PASSWORD) {
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const db = await readDB();
+  const user = db.users.find(u => u.username === username && u.password === password);
+  if (user) {
     req.session.authenticated = true;
-    req.session.role = 'admin';
-    res.json({ success: true, role: 'admin' });
-  } else if (password === VIEWER_PASSWORD) {
-    req.session.authenticated = true;
-    req.session.role = 'viewer';
-    res.json({ success: true, role: 'viewer' });
+    req.session.role = user.role;
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    res.json({ success: true, role: user.role, username: user.username });
   } else {
-    res.status(401).json({ error: 'Mot de passe incorrect' });
+    // legacy fallback
+    if (username === 'admin' && password === PASSWORD && db.users.length === 0) {
+       req.session.authenticated = true;
+       req.session.role = 'admin';
+       req.session.userId = 'admin';
+       req.session.username = 'admin';
+       return res.json({ success: true, role: 'admin', username: 'admin' });
+    }
+    res.status(401).json({ error: 'Identifiants incorrects' });
   }
 });
 
@@ -168,8 +170,49 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/auth/check', (req, res) => {
   res.json({ 
     authenticated: !!(req.session && req.session.authenticated),
-    role: req.session ? req.session.role : null
+    role: req.session ? req.session.role : null,
+    username: req.session ? req.session.username : null,
+    userId: req.session ? req.session.userId : null
   });
+});
+
+// ─── Admin Users & History Routes ─────────────────────────────────────────────
+app.get('/api/users', requireAdmin, async (req, res) => {
+  const db = await readDB();
+  res.json(db.users || []);
+});
+
+app.post('/api/users', requireAdmin, async (req, res) => {
+  const { username, password, role } = req.body;
+  const db = await readDB();
+  if (db.users.some(u => u.username === username)) return res.status(400).json({ error: 'Cet utilisateur existe déjà' });
+  const newUser = { id: uuidv4(), username, password, role: role || 'user' };
+  db.users.push(newUser);
+  await writeDB(db);
+  res.json(newUser);
+});
+
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
+  const db = await readDB();
+  db.users = db.users.filter(u => u.id !== req.params.id);
+  await writeDB(db);
+  res.json({ success: true });
+});
+
+app.get('/api/history', requireAdmin, async (req, res) => {
+  const db = await readDB();
+  res.json(db.history || []);
+});
+
+app.get('/api/history/csv', requireAdmin, async (req, res) => {
+  const db = await readDB();
+  const rows = ['Date,Utilisateur,Action,Details'];
+  (db.history || []).forEach(h => {
+     rows.push(`"${h.timestamp}","${h.username || 'Inconnu'}","${h.action}","${h.details.replace(/"/g, '""')}"`);
+  });
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="historique.csv"');
+  res.send(Buffer.from('\ufeff' + rows.join('\n'), 'utf8')); // UTF-8 BOM
 });
 
 // ─── Categories routes ────────────────────────────────────────────────────────
@@ -182,28 +225,19 @@ app.get('/api/categories', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/categories', requireAuth, async (req, res) => {
+app.post('/api/categories', requireAdmin, async (req, res) => {
   const { name, color } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nom requis' });
-
   try {
     const db = await readDB();
-    const category = {
-      id: uuidv4(),
-      name: name.trim(),
-      color: color || '#6366f1',
-      createdAt: new Date().toISOString()
-    };
-    db.categories = db.categories || [];
+    const category = { id: uuidv4(), name: name.trim(), color: color || '#6366f1', createdAt: new Date().toISOString() };
     db.categories.push(category);
     await writeDB(db);
     res.json(category);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/categories/:id', requireAuth, async (req, res) => {
+app.put('/api/categories/:id', requireAdmin, async (req, res) => {
   try {
     const db = await readDB();
     const idx = db.categories.findIndex(c => c.id === req.params.id);
@@ -211,9 +245,7 @@ app.put('/api/categories/:id', requireAuth, async (req, res) => {
     db.categories[idx] = { ...db.categories[idx], ...req.body, id: req.params.id };
     await writeDB(db);
     res.json(db.categories[idx]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.delete('/api/categories/:id', requireAdmin, async (req, res) => {
@@ -227,9 +259,7 @@ app.delete('/api/categories/:id', requireAdmin, async (req, res) => {
     });
     await writeDB(db);
     res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── Photos routes ────────────────────────────────────────────────────────────
@@ -237,27 +267,18 @@ app.get('/api/photos', requireAuth, async (req, res) => {
   try {
     const db = await readDB();
     res.json(db.photos || []);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (req, res) => {
+  if (req.session.role === 'visitor') return res.status(403).json({ error: 'Non autorisé' });
   let { categoryId, categoryIds } = req.body;
-  if (!categoryIds) {
-    categoryIds = categoryId ? (Array.isArray(categoryId) ? categoryId : [categoryId]) : [];
-  } else if (!Array.isArray(categoryIds)) {
-    categoryIds = [categoryIds];
-  }
+  if (!categoryIds) categoryIds = categoryId ? (Array.isArray(categoryId) ? categoryId : [categoryId]) : [];
+  else if (!Array.isArray(categoryIds)) categoryIds = [categoryIds];
   let db;
-  try {
-    db = await readDB();
-  } catch (e) {
-    return res.status(500).json({ error: "Failed to read database: " + e.message });
-  }
+  try { db = await readDB(); } catch (e) { return res.status(500).json({ error: "Failed to read DB" }); }
 
   const uploaded = [];
-
   for (const file of req.files) {
     try {
       const id = uuidv4();
@@ -268,76 +289,48 @@ app.post('/api/photos/upload', requireAuth, upload.array('photos', 50), async (r
       const thumbpath = path.join(UPLOADS_DIR, thumbFilename);
 
       let sharpImg = sharp(file.buffer).rotate();
-
       const meta = await sharpImg.metadata();
-      if (meta.width > MAX_WIDTH) {
-        sharpImg = sharpImg.resize({ width: MAX_WIDTH, withoutEnlargement: true });
-      }
+      if (meta.width > MAX_WIDTH) sharpImg = sharpImg.resize({ width: MAX_WIDTH, withoutEnlargement: true });
 
       let photoFilename, photoThumbFilename, finalMeta, photoSize, cloudinaryId;
 
       if (useCloudinary) {
-        console.log(`☁️ Uploading to Cloudinary: ${file.originalname}...`);
+        console.log(`☁️ Uploading: ${file.originalname}...`);
         const buffer = await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toBuffer();
         const result = await new Promise((resolve, reject) => {
           cloudinary.uploader.upload_stream({ folder: 'album-apex' }, (error, res) => {
-            if (error) {
-              console.error('❌ Cloudinary Upload Error:', error.message);
-              reject(error);
-            } else {
-              resolve(res);
-            }
+            if (error) reject(error); else resolve(res);
           }).end(buffer);
         });
-
         photoFilename = result.secure_url;
-        // Generate thumbnail using Cloudinary transformations
         photoThumbFilename = result.secure_url.replace('/upload/', '/upload/w_400,h_400,c_fill,q_75/');
         finalMeta = { width: result.width, height: result.height };
         photoSize = result.bytes;
         cloudinaryId = result.public_id;
-        console.log(`✅ Cloudinary Success: ${photoFilename}`);
       } else {
         await sharpImg.jpeg({ quality: 85, mozjpeg: true }).toFile(filepath);
-        await sharp(file.buffer)
-          .rotate()
-          .resize({ width: 400, height: 400, fit: 'cover' })
-          .jpeg({ quality: 75 })
-          .toFile(thumbpath);
-
+        await sharp(file.buffer).rotate().resize({ width: 400, height: 400, fit: 'cover' }).jpeg({ quality: 75 }).toFile(thumbpath);
         finalMeta = await sharp(filepath).metadata();
         photoSize = fs.statSync(filepath).size;
       }
 
       const photo = {
-        id,
-        filename: photoFilename || filename,
-        thumbFilename: photoThumbFilename || thumbFilename,
-        cloudinaryId,
-        originalName: file.originalname,
-        categoryIds: categoryIds,
-        categoryId: categoryIds[0] || null, // Legacy support
-        width: finalMeta.width,
-        height: finalMeta.height,
-        size: photoSize,
-        uploadedAt: new Date().toISOString()
+        id, filename: photoFilename || filename, thumbFilename: photoThumbFilename || thumbFilename,
+        cloudinaryId, originalName: file.originalname, categoryIds, categoryId: categoryIds[0] || null,
+        width: finalMeta.width, height: finalMeta.height, size: photoSize,
+        uploadedAt: new Date().toISOString(), uploadedBy: req.session.userId, preferences: {}
       };
 
-      db.photos = db.photos || [];
       db.photos.push(photo);
       uploaded.push(photo);
-    } catch (err) {
-      console.error('❌ Upload processing error:', file.originalname, err.message);
-      // We continue with other files if one fails
-    }
+    } catch (err) { console.error('❌ Upload error:', err.message); }
   }
 
   try {
+    db.history.push({ id: uuidv4(), userId: req.session.userId, username: req.session.username, action: 'upload', details: `${uploaded.length} photo(s)`, timestamp: new Date().toISOString() });
     await writeDB(db);
     res.json(uploaded);
-  } catch (e) {
-    res.status(500).json({ error: "Failed to save database: " + e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.put('/api/photos/:id', requireAuth, async (req, res) => {
@@ -345,24 +338,29 @@ app.put('/api/photos/:id', requireAuth, async (req, res) => {
     const db = await readDB();
     const idx = db.photos.findIndex(p => p.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Photo non trouvée' });
+    if (req.session.role !== 'admin' && db.photos[idx].uploadedBy !== req.session.userId) {
+       return res.status(403).json({ error: 'Non autorisé' });
+    }
     db.photos[idx] = { ...db.photos[idx], ...req.body, id: req.params.id };
     await writeDB(db);
     res.json(db.photos[idx]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/photos/reorder', requireAuth, async (req, res) => {
-  const { photoIds } = req.body;
+app.post('/api/photos/:id/preference', requireAuth, async (req, res) => {
+  const { icon } = req.body;
   try {
     const db = await readDB();
-    const photoMap = new Map(db.photos.map(p => [p.id, p]));
-    const reordered = photoIds.map(id => photoMap.get(id)).filter(Boolean);
-    const rest = db.photos.filter(p => !photoIds.includes(p.id));
-    db.photos = [...reordered, ...rest];
+    const photo = db.photos.find(p => p.id === req.params.id);
+    if (!photo) return res.status(404).json({ error: 'Photo introuvable' });
+    if (!photo.preferences) photo.preferences = {};
+    if (icon) {
+      photo.preferences[req.session.userId] = icon;
+    } else {
+      delete photo.preferences[req.session.userId];
+    }
     await writeDB(db);
-    res.json({ success: true });
+    res.json(photo);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -370,11 +368,7 @@ app.put('/api/photos/reorder', requireAuth, async (req, res) => {
 
 async function removePhoto(photo) {
   if (useCloudinary && photo.cloudinaryId) {
-    try {
-      await cloudinary.uploader.destroy(photo.cloudinaryId);
-    } catch (e) {
-      console.error('Failed to delete from Cloudinary:', e.message);
-    }
+    try { await cloudinary.uploader.destroy(photo.cloudinaryId); } catch (e) { }
   } else {
     [photo.filename, photo.thumbFilename].forEach(f => {
       if (f && !f.startsWith('http')) {
@@ -385,32 +379,114 @@ async function removePhoto(photo) {
   }
 }
 
-app.delete('/api/photos/:id', requireAdmin, async (req, res) => {
+app.delete('/api/photos/:id', requireAuth, async (req, res) => {
   try {
     const db = await readDB();
     const photo = db.photos.find(p => p.id === req.params.id);
     if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
+    
+    if (req.session.role !== 'admin' && photo.uploadedBy !== req.session.userId) {
+      return res.status(403).json({ error: 'Action non autorisée' });
+    }
 
     await removePhoto(photo);
     db.photos = db.photos.filter(p => p.id !== req.params.id);
     await writeDB(db);
     res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/photos', requireAdmin, async (req, res) => {
+app.delete('/api/photos', requireAuth, async (req, res) => {
   const { ids } = req.body;
   try {
     const db = await readDB();
     const toDelete = db.photos.filter(p => ids.includes(p.id));
+    for (const photo of toDelete) {
+      if (req.session.role !== 'admin' && photo.uploadedBy !== req.session.userId) {
+        return res.status(403).json({ error: 'Action non autorisée sur certaines photos' });
+      }
+    }
     await Promise.all(toDelete.map(p => removePhoto(p)));
     db.photos = db.photos.filter(p => !ids.includes(p.id));
     await writeDB(db);
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
+  const { ids } = req.body;
+  try {
+    const db = await readDB();
+    const photos = db.photos.filter(p => ids.includes(p.id));
+    if (photos.length === 0) return res.status(404).json({ error: 'Aucune photo' });
+
+    db.history.push({ id: uuidv4(), userId: req.session.userId, username: req.session.username, action: 'planche contact', details: `${photos.length} photo(s)`, timestamp: new Date().toISOString() });
+    await writeDB(db);
+
+    const WIDTH = 1200;
+    const HEIGHT = 1600;
+    const GAP = 24;
+    const BORDER = 8;
+
+    let rects = [{x: GAP, y: GAP, w: WIDTH - 2*GAP, h: HEIGHT - 2*GAP}];
+    while(rects.length < photos.length) {
+        rects.sort((a,b) => (b.w * b.h) - (a.w * a.h));
+        const toSplit = rects.shift();
+        const splitVertically = toSplit.w > toSplit.h;
+        const ratio = 0.4 + Math.random() * 0.2; 
+        
+        if (splitVertically) {
+            const w1 = Math.floor((toSplit.w - GAP) * ratio);
+            const w2 = toSplit.w - GAP - w1;
+            rects.push({x: toSplit.x, y: toSplit.y, w: w1, h: toSplit.h});
+            rects.push({x: toSplit.x + w1 + GAP, y: toSplit.y, w: w2, h: toSplit.h});
+        } else {
+            const h1 = Math.floor((toSplit.h - GAP) * ratio);
+            const h2 = toSplit.h - GAP - h1;
+            rects.push({x: toSplit.x, y: toSplit.y, w: toSplit.w, h: h1});
+            rects.push({x: toSplit.x, y: toSplit.y + h1 + GAP, w: toSplit.w, h: h2});
+        }
+    }
+
+    const composites = [];
+    for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        const rect = rects[i];
+        
+        let buffer;
+        if (photo.filename.startsWith('http')) {
+            const nodeFetch = await import('node-fetch').then(m => m.default).catch(() => fetch);
+            const response = await nodeFetch(photo.filename);
+            const ab = await response.arrayBuffer();
+            buffer = Buffer.from(ab);
+        } else {
+            const filepath = path.join(UPLOADS_DIR, photo.filename);
+            buffer = fs.readFileSync(filepath);
+        }
+
+        const rw = Math.max(10, Math.round(rect.w - BORDER*2));
+        const rh = Math.max(10, Math.round(rect.h - BORDER*2));
+
+        const resized = await sharp(buffer)
+           .resize(rw, rh, { fit: 'cover' })
+           .extend({ top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, background: 'white' })
+           .toBuffer();
+           
+        composites.push({ input: resized, top: Math.round(rect.y), left: Math.round(rect.x) });
+    }
+
+    const contactSheet = await sharp({ create: { width: WIDTH, height: HEIGHT, channels: 4, background: 'black' } })
+         .composite(composites)
+         .jpeg({ quality: 90 })
+         .toBuffer();
+
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Content-Disposition': `attachment; filename="planche-contact-${Date.now()}.jpg"`
+    });
+    res.send(contactSheet);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    if (!res.headersSent) res.status(500).json({ error: e.message });
   }
 });
 
@@ -421,6 +497,9 @@ app.get('/api/download/:id', requireAuth, async (req, res) => {
     const photo = db.photos.find(p => p.id === req.params.id);
     if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
 
+    db.history.push({ id: uuidv4(), userId: req.session.userId, username: req.session.username, action: 'download', details: `1 photo`, timestamp: new Date().toISOString() });
+    await writeDB(db);
+
     if (photo.filename.startsWith('http')) {
       res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
     } else {
@@ -428,9 +507,7 @@ app.get('/api/download/:id', requireAuth, async (req, res) => {
       if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
       res.download(filepath, photo.originalName || photo.filename);
     }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/download/bulk', requireAuth, async (req, res) => {
@@ -440,11 +517,13 @@ app.post('/api/download/bulk', requireAuth, async (req, res) => {
     const photos = db.photos.filter(p => ids.includes(p.id));
     if (photos.length === 0) return res.status(404).json({ error: 'Aucune photo trouvée' });
 
+    db.history.push({ id: uuidv4(), userId: req.session.userId, username: req.session.username, action: 'download batch', details: `${photos.length} photo(s)`, timestamp: new Date().toISOString() });
+    await writeDB(db);
+
     res.set({
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="album-apex-${Date.now()}.zip"`
     });
-
     const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', err => { console.error(err); res.end(); });
     archive.pipe(res);
@@ -453,35 +532,22 @@ app.post('/api/download/bulk', requireAuth, async (req, res) => {
       if (photo.filename.startsWith('http')) {
         const stream = await new Promise((resolve) => {
           https.get(photo.filename, (response) => {
-            if (response.statusCode === 200) resolve(response);
-            else resolve(null);
+            if (response.statusCode === 200) resolve(response); else resolve(null);
           }).on('error', () => resolve(null));
         });
-        if (stream) {
-          archive.append(stream, { name: photo.originalName || photo.id + '.jpg' });
-        }
+        if (stream) archive.append(stream, { name: photo.originalName || photo.id + '.jpg' });
       } else {
         const filepath = path.join(UPLOADS_DIR, photo.filename);
-        if (fs.existsSync(filepath)) {
-          archive.file(filepath, { name: photo.originalName || photo.filename });
-        }
+        if (fs.existsSync(filepath)) archive.file(filepath, { name: photo.originalName || photo.filename });
       }
     }
     archive.finalize();
-  } catch (e) {
-    if (!res.headersSent) res.status(500).json({ error: e.message });
-  }
+  } catch (e) { if (!res.headersSent) res.status(500).json({ error: e.message }); }
 });
 
-// ─── Catch-all: serve frontend ────────────────────────────────────────────────
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// ─── Catch-all ────────────────────────────────────────────────────────────────
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 Album Apex started on http://localhost:${PORT}`);
-  console.log(`☁️  Cloudinary: ${useCloudinary ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`📡 Supabase: ${supabase ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`🔑 APP_PASSWORD: ${PASSWORD}`);
 });

@@ -3,15 +3,27 @@
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 'use strict';
 
+const prefIcons = {
+  star: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" style="color:#eab308"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  heart: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" style="color:#f43f5e"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+  skull: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#94a3b8"><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><path d="M8 20v2h8v-2"/><path d="M12.5 22v-2"/><path d="M11.5 22v-2"/><path d="M20 10.999h-.01"/><path d="M4 10.999h-.01"/><path d="M20 14c0 3-1.5 6-3.5 6h-9c-2 0-3.5-3-3.5-6s2-8 8-8 8 5 8 8z"/></svg>',
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="color:#22c55e"><polyline points="20 6 9 17 4 12"/></svg>'
+};
+
 // ── State ────────────────────────────────────────────────────────────────────
 const state = {
     categories: [],
     photos: [],
+    users: [],
+    history: [],
     selectedPhotos: new Set(),
     activeFilter: 'all',
     lightboxIndex: -1,
     filteredPhotos: [],
-    uploadQueue: []
+    uploadQueue: [],
+    userRole: null,
+    userId: null,
+    username: null
 };
 
 // ── DOM Helpers ──────────────────────────────────────────────────────────────
@@ -56,10 +68,11 @@ function showLoginScreen() {
     $('app').classList.add('hidden');
 }
 
-function showApp(role = 'admin') {
+function showApp(role = 'admin', userId = null, username = null) {
     state.userRole = role;
-    document.body.classList.remove('role-admin', 'role-viewer');
-    document.body.classList.add(`role-${role}`);
+    state.userId = userId;
+    state.username = username;
+    document.body.className = `role-${role}`;
     
     $('login-screen').classList.add('hidden');
     $('app').classList.remove('hidden');
@@ -67,6 +80,7 @@ function showApp(role = 'admin') {
 
 $('login-form').addEventListener('submit', async e => {
     e.preventDefault();
+    const uname = $('username-input').value;
     const pw = $('password-input').value;
     const btn = $('login-btn');
     const errEl = $('login-error');
@@ -78,11 +92,11 @@ $('login-form').addEventListener('submit', async e => {
         const res = await fetch('/api/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: pw })
+            body: JSON.stringify({ username: uname, password: pw })
         });
         const data = await res.json();
         if (res.ok) {
-            showApp(data.role || 'admin');
+            showApp(data.role || 'admin', data.userId, data.username);
             await loadAll();
         } else {
             errEl.classList.remove('hidden');
@@ -109,22 +123,26 @@ $('logout-btn').addEventListener('click', async () => {
 });
 
 // ── Navigation ────────────────────────────────────────────────────────────────
-const views = ['gallery', 'upload', 'categories'];
+const views = ['gallery', 'upload', 'categories', 'users', 'history'];
 function switchView(v) {
     views.forEach(id => {
-        $(`view-${id}`).classList.toggle('active', id === v);
-        $(`view-${id}`).classList.toggle('hidden', id !== v);
-        $(`nav-${id}`).classList.toggle('active', id === v);
+        const elView = $(`view-${id}`);
+        const elNav = $(`nav-${id}`);
+        if(elView) elView.classList.toggle('active', id === v);
+        if(elView) elView.classList.toggle('hidden', id !== v);
+        if(elNav) elNav.classList.toggle('active', id === v);
     });
     if (v === 'upload') populateUploadCategories();
     if (v === 'categories') renderCategories();
+    if (v === 'users') loadUsers();
+    if (v === 'history') loadHistory();
 }
 
 views.forEach(v => {
-    $(`nav-${v}`).addEventListener('click', () => switchView(v));
+    const n = $(`nav-${v}`);
+    if(n) n.addEventListener('click', () => switchView(v));
 });
 
-// Sidebar collapse
 let sidebarCollapsed = false;
 $('sidebar-toggle').addEventListener('click', () => {
     sidebarCollapsed = !sidebarCollapsed;
@@ -157,12 +175,10 @@ function getFilteredPhotos() {
 
 function renderFilterBar() {
     const bar = $('filter-bar').querySelector('.filter-scroll');
-    // Keep "all" chip
     const allChip = bar.querySelector('[data-cat="all"]');
     bar.innerHTML = '';
     bar.appendChild(allChip);
 
-    // "No category"
     const noneCount = state.photos.filter(p => !p.categoryIds || p.categoryIds.length === 0).length;
     if (noneCount > 0) {
         const chip = el('button', `filter-chip${state.activeFilter === '__none__' ? ' active' : ''}`);
@@ -198,7 +214,6 @@ function renderGallery() {
     const filtered = getFilteredPhotos();
     state.filteredPhotos = filtered;
 
-    // Clear non-empty-state items
     grid.querySelectorAll('.photo-card').forEach(c => c.remove());
     $('gallery-empty').classList.toggle('hidden', filtered.length > 0);
 
@@ -228,6 +243,11 @@ function createPhotoCard(photo, idx) {
         catBadges += `<span class="photo-cat-badge" style="background:${cat.color}; right:${8 + (i * 12)}px" title="${escHtml(cat.name)}"></span>`;
     });
 
+    let prefsHtml = '';
+    if (photo.preferences && state.userId && photo.preferences[state.userId]) {
+        prefsHtml = `<div class="photo-prefs"><div class="pref-icon-display">${prefIcons[photo.preferences[state.userId]]}</div></div>`;
+    }
+
     card.innerHTML = `
     <img src="${thumbSrc}" alt="${escHtml(photo.originalName)}" loading="lazy" />
     <div class="photo-check">
@@ -235,6 +255,7 @@ function createPhotoCard(photo, idx) {
         <polyline points="20 6 9 17 4 12"/>
       </svg>
     </div>
+    ${prefsHtml}
     ${catBadges}
     <div class="photo-overlay">
       <span class="photo-name">${escHtml(photo.originalName)}</span>
@@ -260,7 +281,6 @@ function createPhotoCard(photo, idx) {
     </div>
   `;
 
-    // Click: open lightbox (not on action buttons)
     card.addEventListener('click', e => {
         if (e.target.closest('[data-action]')) return;
         if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -272,13 +292,11 @@ function createPhotoCard(photo, idx) {
         }
     });
 
-    // Checkbox click area
     card.querySelector('.photo-check').addEventListener('click', e => {
         e.stopPropagation();
         toggleSelect(photo.id);
     });
 
-    // Action buttons
     card.querySelector('[data-action="cat"]').addEventListener('click', e => {
         e.stopPropagation();
         openChangeCatModal([photo.id]);
@@ -289,6 +307,10 @@ function createPhotoCard(photo, idx) {
     });
     card.querySelector('[data-action="delete"]').addEventListener('click', e => {
         e.stopPropagation();
+        if (state.userRole !== 'admin' && photo.uploadedBy !== state.userId) {
+            toast("Vous ne pouvez supprimer que vos propres photos", "error");
+            return;
+        }
         confirmDelete([photo.id], 'cette photo');
     });
 
@@ -304,17 +326,14 @@ function toggleSelect(id) {
     if (state.selectedPhotos.has(id)) state.selectedPhotos.delete(id);
     else state.selectedPhotos.add(id);
     updateSelectionUI();
-    // Update card visual
     const card = document.querySelector(`.photo-card[data-id="${id}"]`);
     if (card) card.classList.toggle('selected', state.selectedPhotos.has(id));
 }
 
 function updateSelectionUI() {
     const count = state.selectedPhotos.size;
-    const selActions = $('selection-actions');
-    const selCount = $('selection-count');
-    selActions.classList.toggle('hidden', count === 0);
-    selCount.textContent = `${count} sélectionnée${count > 1 ? 's' : ''}`;
+    $('selection-actions').classList.toggle('hidden', count === 0);
+    $('selection-count').textContent = `${count} sélectionnée${count > 1 ? 's' : ''}`;
 }
 
 $('btn-clear-selection').addEventListener('click', () => {
@@ -334,7 +353,7 @@ $('btn-select-all').addEventListener('click', () => {
     renderGallery();
 });
 
-// ── Download ──────────────────────────────────────────────────────────────────
+// ── Download & Planche ────────────────────────────────────────────────────────
 function downloadSingle(id) {
     const link = document.createElement('a');
     link.href = `/api/download/${id}`;
@@ -343,7 +362,7 @@ function downloadSingle(id) {
 
 async function downloadBulk(ids) {
     if (!ids.length) return;
-    toast(`Préparation de ${ids.length} photo${ids.length > 1 ? 's' : ''}…`, 'info');
+    toast(`Préparation de ${ids.length} photo(s)…`, 'info');
     try {
         const res = await fetch('/api/download/bulk', {
             method: 'POST',
@@ -358,7 +377,7 @@ async function downloadBulk(ids) {
         link.download = `album-apex-${Date.now()}.zip`;
         link.click();
         URL.revokeObjectURL(url);
-        toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} téléchargée${ids.length > 1 ? 's' : ''}`, 'success');
+        toast(`${ids.length} photo(s) téléchargée(s)`, 'success');
     } catch {
         toast('Erreur lors du téléchargement', 'error');
     }
@@ -366,6 +385,39 @@ async function downloadBulk(ids) {
 
 $('btn-download-selected').addEventListener('click', () => {
     downloadBulk([...state.selectedPhotos]);
+});
+
+$('btn-contact-sheet').addEventListener('click', async () => {
+    const ids = [...state.selectedPhotos];
+    if (!ids.length) return;
+    
+    // Disable btn temporarily
+    const btn = $('btn-contact-sheet');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spinner-sm" style="display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></svg> Calcul...`;
+
+    try {
+        const res = await fetch('/api/photos/contact-sheet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `planche-contact.jpg`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast('Planche contact générée !', 'success');
+    } catch {
+        toast('Erreur lors de la création de la planche contact', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+    }
 });
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -391,18 +443,28 @@ async function deletePhotos(ids) {
         });
         renderFilterBar();
         renderGallery();
-        toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} supprimée${ids.length > 1 ? 's' : ''}`, 'success');
+        toast(`${ids.length} photo(s) supprimée(s)`, 'success');
     } catch {
-        toast('Erreur de suppression', 'error');
+        toast('Erreur de suppression (droits insuffisants ?)', 'error');
     }
 }
 
 $('btn-delete-selected').addEventListener('click', () => {
     const ids = [...state.selectedPhotos];
-    confirmDelete(ids, `${ids.length} photo${ids.length > 1 ? 's' : ''}`);
+    
+    // Client side check
+    if (state.userRole !== 'admin') {
+       const toDel = state.photos.filter(p => ids.includes(p.id));
+       const hasOthers = toDel.some(p => p.uploadedBy !== state.userId);
+       if (hasOthers) {
+           toast("Vous ne pouvez pas supprimer les photos des autres utilisateurs", "error");
+           return;
+       }
+    }
+    confirmDelete(ids, `${ids.length} photo(s)`);
 });
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
+// ── Lightbox & Prefs ─────────────────────────────────────────────────────────
 function openLightbox(idx) {
     state.lightboxIndex = idx;
     updateLightbox();
@@ -427,7 +489,6 @@ function updateLightbox() {
     const photoCatIds = photo.categoryIds || (photo.categoryId ? [photo.categoryId] : []);
     const photoCats = photoCatIds.map(id => state.categories.find(c => c.id === id)).filter(Boolean);
     const catEl = $('lightbox-cat');
-    
     if (photoCats.length > 0) {
         catEl.innerHTML = photoCats.map(cat => 
             `<span class="filter-chip mini"><span class="chip-dot" style="background:${cat.color}"></span>${escHtml(cat.name)}</span>`
@@ -440,6 +501,31 @@ function updateLightbox() {
 
     $('lightbox-prev').style.display = state.lightboxIndex <= 0 ? 'none' : 'flex';
     $('lightbox-next').style.display = state.lightboxIndex >= state.filteredPhotos.length - 1 ? 'none' : 'flex';
+
+    // Update PrefPicker
+    const prefEl = $('lightbox-prefs-picker');
+    prefEl.innerHTML = '';
+    const currentPref = (photo.preferences && state.userId) ? photo.preferences[state.userId] : null;
+    ['star', 'heart', 'skull', 'check'].forEach(icon => {
+        const btn = el('button', `pref-btn ${currentPref === icon ? 'active' : ''}`);
+        btn.innerHTML = prefIcons[icon];
+        btn.title = icon;
+        btn.addEventListener('click', async () => {
+            const newIcon = currentPref === icon ? null : icon;
+            try {
+                const updatedPhoto = await api('POST', `/api/photos/${photo.id}/preference`, { icon: newIcon });
+                if (updatedPhoto) {
+                    const idx = state.photos.findIndex(p => p.id === photo.id);
+                    if (idx !== -1) state.photos[idx] = updatedPhoto;
+                    updateLightbox(); // re-render
+                    renderGallery(); // update card
+                }
+            } catch (e) {
+                toast("Erreur sauvegarde préférence", "error");
+            }
+        });
+        prefEl.appendChild(btn);
+    });
 }
 
 function lightboxKeyHandler(e) {
@@ -469,16 +555,12 @@ $('lightbox-download').addEventListener('click', () => {
 $('lightbox-delete').addEventListener('click', () => {
     const photo = state.filteredPhotos[state.lightboxIndex];
     if (!photo) return;
+    if (state.userRole !== 'admin' && photo.uploadedBy !== state.userId) {
+       toast("Action refusée", "error");
+       return;
+    }
     closeLightbox();
     confirmDelete([photo.id], `"${photo.originalName}"`);
-});
-
-// Touch/swipe on lightbox
-let touchStartX = 0;
-$('lightbox').addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
-$('lightbox').addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 50) lightboxNav(dx < 0 ? 1 : -1);
 });
 
 // ── Upload ────────────────────────────────────────────────────────────────────
@@ -496,7 +578,6 @@ function populateUploadCategories() {
     });
 }
 
-// File Queue
 state.uploadQueue = [];
 
 function addFilesToQueue(files) {
@@ -521,7 +602,6 @@ function renderQueueItem(item) {
     const div = el('div', 'queue-item');
     div.dataset.qid = item.id;
 
-    // Thumbnail preview
     const thumb = el('img', 'queue-thumb');
     thumb.alt = item.file.name;
     const reader = new FileReader();
@@ -536,7 +616,6 @@ function renderQueueItem(item) {
     status.textContent = 'En attente';
 
     const removeBtn = el('button', 'queue-remove', `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`);
-    removeBtn.title = 'Retirer';
     removeBtn.addEventListener('click', () => {
         state.uploadQueue = state.uploadQueue.filter(q => q.id !== item.id);
         div.remove();
@@ -550,19 +629,16 @@ function renderQueueItem(item) {
 }
 
 function updateQueueItemStatus(item) {
-    const el = document.querySelector(`[data-status="${item.id}"]`);
-    if (!el) return;
+    const elem = document.querySelector(`[data-status="${item.id}"]`);
+    if (!elem) return;
     const icons = {
         pending: '', uploading: '<svg class="spinner-sm" style="display:inline-block;width:12px;height:12px;border:2px solid rgba(99,102,241,0.3);border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite"></svg> ',
         done: '✓ ', error: '✗ '
     };
-    el.className = `queue-status ${item.status}`;
-    el.innerHTML = `${icons[item.status] || ''}${item.status === 'pending' ? 'En attente' :
-        item.status === 'uploading' ? 'Upload…' :
-            item.status === 'done' ? 'OK' : 'Erreur'
-        }`;
-    // Hide remove button when done
-    const row = el.closest('.queue-item');
+    elem.className = `queue-status ${item.status}`;
+    elem.innerHTML = `${icons[item.status] || ''}${item.status === 'pending' ? 'En attente' :
+        item.status === 'uploading' ? 'Upload…' : item.status === 'done' ? 'OK' : 'Erreur' }`;
+    const row = elem.closest('.queue-item');
     if (row && item.status === 'done') row.querySelector('.queue-remove').style.display = 'none';
 }
 
@@ -572,7 +648,6 @@ function formatBytes(b) {
     return (b / 1024 / 1024).toFixed(1) + ' MB';
 }
 
-// Drop Zone
 const dropZone = $('drop-zone');
 const fileInput = $('file-input');
 
@@ -603,7 +678,6 @@ $('btn-upload').addEventListener('click', async () => {
     const btn = $('btn-upload');
     btn.disabled = true;
 
-    // Upload in batches of 10
     const batchSize = 10;
     for (let i = 0; i < pending.length; i += batchSize) {
         const batch = pending.slice(i, i + batchSize);
@@ -635,10 +709,9 @@ $('btn-upload').addEventListener('click', async () => {
     }
 
     const successCount = state.uploadQueue.filter(q => q.status === 'done').length;
-    toast(`${successCount} photo${successCount > 1 ? 's' : ''} uploadée${successCount > 1 ? 's' : ''} avec succès !`, 'success');
+    toast(`${successCount} photo(s) uploadée(s) avec succès !`, 'success');
     btn.disabled = false;
 
-    // After upload, refresh and switch to gallery
     await loadAll();
     setTimeout(() => {
         state.uploadQueue = [];
@@ -654,10 +727,10 @@ function renderCategories() {
     const grid = $('categories-grid');
     grid.querySelectorAll('.cat-card').forEach(c => c.remove());
     $('categories-empty').classList.toggle('hidden', state.categories.length > 0);
-    $('cat-count').textContent = `${state.categories.length} catégorie${state.categories.length !== 1 ? 's' : ''}`;
+    $('cat-count').textContent = `${state.categories.length} catégorie(s)`;
 
     state.categories.forEach(cat => {
-        const count = state.photos.filter(p => p.categoryId === cat.id).length;
+        const count = state.photos.filter(p => p.categoryId === cat.id || (p.categoryIds||[]).includes(cat.id)).length;
         const card = el('div', 'cat-card');
         card.innerHTML = `
       <div class="cat-icon" style="background:${cat.color}22; color:${cat.color}">
@@ -668,16 +741,16 @@ function renderCategories() {
       </div>
       <div class="cat-info">
         <div class="cat-name">${escHtml(cat.name)}</div>
-        <div class="cat-count">${count} photo${count !== 1 ? 's' : ''}</div>
+        <div class="cat-count">${count} photo(s)</div>
       </div>
       <div class="cat-actions">
-        <button class="cat-action-btn" data-action="edit" title="Modifier" aria-label="Modifier ${escHtml(cat.name)}">
+        <button class="cat-action-btn" data-action="edit" title="Modifier">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
-        <button class="cat-action-btn danger" data-action="delete" title="Supprimer" aria-label="Supprimer ${escHtml(cat.name)}">
+        <button class="cat-action-btn danger" data-action="delete" title="Supprimer">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
           </svg>
@@ -692,29 +765,22 @@ function renderCategories() {
 }
 
 function confirmDeleteCategory(cat) {
-    const count = state.photos.filter(p => p.categoryId === cat.id).length;
+    const count = state.photos.filter(p => p.categoryId === cat.id || (p.categoryIds||[]).includes(cat.id)).length;
     $('confirm-title').textContent = 'Supprimer la catégorie';
-    $('confirm-message').textContent = `Supprimer "${cat.name}" ?${count > 0 ? ` Les ${count} photo${count > 1 ? 's' : ''} seront désassociées.` : ''}`;
+    $('confirm-message').textContent = `Supprimer "${cat.name}" ?${count > 0 ? ` Les ${count} photo(s) seront désassociées.` : ''}`;
     $('confirm-modal').classList.remove('hidden');
     $('confirm-ok').onclick = async () => {
         $('confirm-modal').classList.add('hidden');
         try {
             await api('DELETE', `/api/categories/${cat.id}`);
             state.categories = state.categories.filter(c => c.id !== cat.id);
-            state.photos = state.photos.map(p => ({ ...p, categoryId: p.categoryId === cat.id ? null : p.categoryId }));
-            renderCategories();
-            renderFilterBar();
-            if (state.activeFilter === cat.id) setFilter('all');
+            await loadAll();
             toast('Catégorie supprimée', 'success');
-        } catch {
-            toast('Erreur de suppression', 'error');
-        }
+        } catch { toast('Erreur de suppression', 'error'); }
     };
 }
 
-// ── Category Modal ────────────────────────────────────────────────────────────
 let selectedColor = '#6366f1';
-
 function openCatModal(cat = null) {
     $('cat-modal-title').textContent = cat ? 'Modifier la catégorie' : 'Nouvelle catégorie';
     $('cat-save-btn').textContent = cat ? 'Enregistrer' : 'Créer';
@@ -728,10 +794,10 @@ function openCatModal(cat = null) {
     setTimeout(() => $('cat-name').focus(), 50);
 }
 
-$('btn-new-category').addEventListener('click', () => openCatModal());
-$('cat-modal-close').addEventListener('click', () => $('cat-modal').classList.add('hidden'));
-$('cat-cancel-btn').addEventListener('click', () => $('cat-modal').classList.add('hidden'));
-$('cat-modal-overlay').addEventListener('click', () => $('cat-modal').classList.add('hidden'));
+$('btn-new-category')?.addEventListener('click', () => openCatModal());
+$('cat-modal-close')?.addEventListener('click', () => $('cat-modal').classList.add('hidden'));
+$('cat-cancel-btn')?.addEventListener('click', () => $('cat-modal').classList.add('hidden'));
+$('cat-modal-overlay')?.addEventListener('click', () => $('cat-modal').classList.add('hidden'));
 
 document.querySelectorAll('.color-swatch').forEach(swatch => {
     swatch.addEventListener('click', () => {
@@ -741,7 +807,7 @@ document.querySelectorAll('.color-swatch').forEach(swatch => {
     });
 });
 
-$('cat-form').addEventListener('submit', async e => {
+$('cat-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     const name = $('cat-name').value.trim();
     const id = $('cat-id').value;
@@ -764,14 +830,11 @@ $('cat-form').addEventListener('submit', async e => {
         $('cat-modal').classList.add('hidden');
         renderCategories();
         renderFilterBar();
-    } catch (err) {
-        toast(err.message || 'Erreur', 'error');
-    }
+    } catch (err) { toast(err.message || 'Erreur', 'error'); }
 });
 
 // ── Change Category ───────────────────────────────────────────────────────────
 let targetPhotosToChangeCat = [];
-
 function openChangeCatModal(photoIds) {
     targetPhotosToChangeCat = photoIds;
     const container = $('change-cat-list');
@@ -804,12 +867,11 @@ function closeChangeCatModal() {
     $('change-cat-modal').classList.add('hidden');
     targetPhotosToChangeCat = [];
 }
+$('change-cat-close')?.addEventListener('click', closeChangeCatModal);
+$('change-cat-cancel')?.addEventListener('click', closeChangeCatModal);
+$('change-cat-modal-overlay')?.addEventListener('click', closeChangeCatModal);
 
-$('change-cat-close').addEventListener('click', closeChangeCatModal);
-$('change-cat-cancel').addEventListener('click', closeChangeCatModal);
-$('change-cat-modal-overlay').addEventListener('click', closeChangeCatModal);
-
-$('change-cat-save').addEventListener('click', async () => {
+$('change-cat-save')?.addEventListener('click', async () => {
     const newCatIds = Array.from(document.querySelectorAll('input[name="change-cats"]:checked')).map(i => i.value);
     const ids = targetPhotosToChangeCat;
     if (!ids.length) return;
@@ -820,7 +882,6 @@ $('change-cat-save').addEventListener('click', async () => {
 
     try {
         await Promise.all(ids.map(id => api('PUT', `/api/photos/${id}`, { categoryIds: newCatIds, categoryId: newCatIds[0] || null })));
-
         ids.forEach(id => {
             const idx = state.photos.findIndex(p => p.id === id);
             if (idx !== -1) {
@@ -829,44 +890,121 @@ $('change-cat-save').addEventListener('click', async () => {
             }
         });
 
-        toast(`${ids.length} photo${ids.length > 1 ? 's' : ''} déplacée${ids.length > 1 ? 's' : ''}`, 'success');
-        
+        toast(`${ids.length} photo(s) modifiée(s)`, 'success');
         state.selectedPhotos.clear();
         updateSelectionUI();
-
         closeChangeCatModal();
         renderFilterBar();
         renderGallery();
-        if (!$('lightbox').classList.contains('hidden')) {
-            updateLightbox();
-        }
-    } catch (err) {
-        toast('Erreur lors du déplacement', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Déplacer';
-    }
+        if (!$('lightbox').classList.contains('hidden')) updateLightbox();
+    } catch (err) { toast('Erreur lors du déplacement', 'error'); } 
+    finally { btn.disabled = false; btn.textContent = 'Déplacer'; }
 });
 
-$('btn-change-cat-selected').addEventListener('click', () => {
-    openChangeCatModal([...state.selectedPhotos]);
-});
-
-$('lightbox-change-cat').addEventListener('click', () => {
+$('btn-change-cat-selected')?.addEventListener('click', () => { openChangeCatModal([...state.selectedPhotos]); });
+$('lightbox-change-cat')?.addEventListener('click', () => {
     const photo = state.filteredPhotos[state.lightboxIndex];
     if (photo) openChangeCatModal([photo.id]);
 });
+
+
+// ── Admin: Users ─────────────────────────────────────────────────────────────
+async function loadUsers() {
+    try {
+        const users = await api('GET', '/api/users');
+        state.users = users;
+        renderUsers();
+    } catch { toast("Erreur lors du chargement des utilisateurs", "error"); }
+}
+
+function renderUsers() {
+    $('users-count').textContent = `${state.users.length} utilisateur(s)`;
+    const list = $('users-list');
+    list.innerHTML = '';
+    state.users.forEach(u => {
+        const card = el('div', 'user-card');
+        card.innerHTML = `
+            <div class="user-info">
+               <span class="user-name">${escHtml(u.username)}</span>
+               <span class="user-role">${u.role}</span>
+            </div>
+            <div>
+               <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Supprimer</button>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+window.deleteUser = async function(id) {
+    if (id === state.userId) return toast("Impossible de vous supprimer vous-même", "error");
+    if (!confirm("Voulez-vous vraiment supprimer cet utilisateur ?")) return;
+    try {
+        await api('DELETE', `/api/users/${id}`);
+        toast("Utilisateur supprimé", "success");
+        loadUsers();
+    } catch { toast("Erreur de suppression", "error"); }
+}
+
+$('btn-new-user')?.addEventListener('click', () => {
+    $('user-modal').classList.remove('hidden');
+});
+
+$('user-cancel-btn')?.addEventListener('click', () => $('user-modal').classList.add('hidden'));
+$('user-modal-overlay')?.addEventListener('click', () => $('user-modal').classList.add('hidden'));
+$('user-form')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const username = $('user-name').value;
+    const password = $('user-pwd').value;
+    const role = $('user-role').value;
+    try {
+        await api('POST', '/api/users', { username, password, role });
+        toast("Utilisateur créé", "success");
+        $('user-modal').classList.add('hidden');
+        $('user-form').reset();
+        loadUsers();
+    } catch(err) { toast(err.message, "error"); }
+});
+
+// ── Admin: History ──────────────────────────────────────────────────────────
+async function loadHistory() {
+    try {
+        const history = await api('GET', '/api/history');
+        state.history = history.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        renderHistory();
+    } catch { toast("Erreur lors du chargement de l'historique", "error"); }
+}
+
+function renderHistory() {
+    const tbody = $('history-tbody');
+    tbody.innerHTML = '';
+    state.history.forEach(h => {
+        const tr = el('tr');
+        const dt = new Date(h.timestamp);
+        tr.innerHTML = `
+            <td>${dt.toLocaleDateString()} ${dt.toLocaleTimeString()}</td>
+            <td><strong>${escHtml(h.username || 'Inconnu')}</strong></td>
+            <td>${escHtml(h.action)}</td>
+            <td>${escHtml(h.details)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+$('btn-export-csv')?.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.href = '/api/history/csv';
+    link.click();
+});
+
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async function init() {
     try {
         const auth = await fetch('/api/auth/check').then(r => r.json());
         if (auth.authenticated) {
-            showApp(auth.role || 'admin');
+            showApp(auth.role || 'admin', auth.userId, auth.username);
             await loadAll();
         }
-        // else: login screen is already shown by default
-    } catch {
-        // Server might be starting, show login screen
-    }
+    } catch { }
 })();

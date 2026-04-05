@@ -8,7 +8,6 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const fetch = require('node-fetch'); // we'll use https natively or dynamic import if node-fetch is missing, but sharp buffer can be fetched easily via native fetch in Node 18+
 const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
 const { createClient } = require('@supabase/supabase-js');

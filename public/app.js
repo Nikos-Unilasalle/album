@@ -28,6 +28,7 @@ const state = {
         height: 1600,
         gap: 24,
         border: 8,
+        fit: 'cover',
         backgroundColor: '#000000',
         borderColor: '#ffffff'
     }
@@ -329,7 +330,8 @@ function createPhotoCard(photo, idx) {
                 if (updatedPhoto) {
                     const i = state.photos.findIndex(p => p.id === photo.id);
                     if (i !== -1) state.photos[i] = updatedPhoto;
-                    renderGallery();
+                    // SURGICAL UPDATE: find the specific card and update its pref icon
+                    updatePhotoCardUI(photo.id, updatedPhoto);
                 }
             } catch (err) {
                 toast("Erreur", "error");
@@ -469,10 +471,17 @@ $('btn-contact-sheet-settings')?.addEventListener('click', () => {
     $('cs-height').value = s.height;
     $('cs-gap').value = s.gap;
     $('cs-border').value = s.border;
+    $('cs-fit').value = s.fit || 'cover';
     $('cs-bg-color').value = s.backgroundColor;
+    $('cs-bg-color').parentElement.querySelector('.color-value').textContent = s.backgroundColor;
     $('cs-border-color').value = s.borderColor;
+    $('cs-border-color').parentElement.querySelector('.color-value').textContent = s.borderColor;
     $('cs-modal').classList.remove('hidden');
 });
+
+// Update color value display on change
+$('cs-bg-color')?.addEventListener('input', e => { e.target.parentElement.querySelector('.color-value').textContent = e.target.value.toUpperCase(); });
+$('cs-border-color')?.addEventListener('input', e => { e.target.parentElement.querySelector('.color-value').textContent = e.target.value.toUpperCase(); });
 
 $('cs-modal-close')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
 $('cs-cancel-btn')?.addEventListener('click', () => $('cs-modal').classList.add('hidden'));
@@ -485,6 +494,7 @@ $('cs-form')?.addEventListener('submit', async e => {
         height: parseInt($('cs-height').value),
         gap: parseInt($('cs-gap').value),
         border: parseInt($('cs-border').value),
+        fit: $('cs-fit').value,
         backgroundColor: $('cs-bg-color').value,
         borderColor: $('cs-border-color').value
     };
@@ -634,8 +644,8 @@ function updateLightbox() {
                 if (updatedPhoto) {
                     const idx = state.photos.findIndex(p => p.id === photo.id);
                     if (idx !== -1) state.photos[idx] = updatedPhoto;
-                    updateLightbox(); // re-render
-                    renderGallery(); // update card
+                    updateLightbox(); // update lightbox
+                    updatePhotoCardUI(photo.id, updatedPhoto); // update card in background
                 }
             } catch (e) {
                 toast("Erreur sauvegarde préférence", "error");
@@ -1125,3 +1135,27 @@ $('btn-export-csv')?.addEventListener('click', () => {
         }
     } catch { }
 })();
+function updatePhotoCardUI(photoId, updatedPhoto) {
+    const card = document.querySelector(`.photo-card[data-id="${photoId}"]`);
+    if (!card) return;
+
+    // 1. Update preference icon display
+    let prefsContainer = card.querySelector('.photo-prefs');
+    const currentPref = (updatedPhoto.preferences && state.userId) ? updatedPhoto.preferences[state.userId] : null;
+
+    if (currentPref) {
+        if (!prefsContainer) {
+            prefsContainer = el('div', 'photo-prefs');
+            // Insert before the overlay
+            card.insertBefore(prefsContainer, card.querySelector('.photo-overlay'));
+        }
+        prefsContainer.innerHTML = `<div class="pref-icon-display">${prefIcons[currentPref]}</div>`;
+    } else if (prefsContainer) {
+        prefsContainer.remove();
+    }
+
+    // 2. Update buttons active state
+    card.querySelectorAll('[data-action="pref"]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.icon === currentPref);
+    });
+}

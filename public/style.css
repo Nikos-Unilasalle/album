@@ -1784,3 +1784,177 @@ body.role-viewer .nav-admin-only {
 .modal-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 input[type="color"] { cursor: pointer; border: none; background: none; }
+
+/* ── Contact Sheet Modal Premium Styling ──────────────── */
+.cs-modal-box {
+  max-width: 520px;
+  background: linear-gradient(165deg, #1e1f2e 0%, #14151f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg), 0 0 60px rgba(99, 102, 241, 0.12);
+}
+
+.modal-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent);
+}
+
+.cs-modal-box .modal-body {
+  padding: 1.25rem 1.5rem 0.5rem;
+}
+
+.settings-section {
+  margin-bottom: 1rem;
+  padding: 1rem 1.15rem;
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b6d82;
+  margin-bottom: 0.85rem;
+}
+
+.cs-modal-box .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.cs-modal-box .form-row:last-child {
+  margin-bottom: 0;
+}
+
+.cs-modal-box .input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cs-modal-box .input-group label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #8b8da2;
+  margin-bottom: 0;
+}
+
+.cs-modal-box .form-input,
+.cs-modal-box input[type="number"],
+.cs-modal-box select {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  color: #f1f2f7;
+  font-size: 0.88rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cs-modal-box .form-input:focus,
+.cs-modal-box input[type="number"]:focus,
+.cs-modal-box select:focus {
+  border-color: var(--accent);
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.cs-modal-box select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8da2' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 2rem;
+}
+
+.cs-modal-box select option {
+  background: #1a1b25;
+  color: #f1f2f7;
+}
+
+.color-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 5px 10px;
+  height: 38px;
+  transition: border-color 0.2s;
+}
+
+.color-input-wrapper:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.color-input-wrapper input[type="color"] {
+  width: 28px;
+  height: 22px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.color-input-wrapper input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-input-wrapper input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.color-value {
+  font-family: 'Inter', monospace;
+  font-size: 0.78rem;
+  color: #6b6d82;
+  letter-spacing: 0.02em;
+}
+
+.cs-modal-box .modal-actions {
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 0.25rem;
+}
+
+/* ── Preference Update Optimization ──────────────── */
+.pref-btn {
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+}
+
+.pref-btn:hover {
+  transform: scale(1.2);
+}
+
+.pref-btn.active {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.pref-icon-display {
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+

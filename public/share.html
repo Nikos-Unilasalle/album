@@ -1,23 +1,150 @@
 <!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photos partagées — Album Apex</title>
-    <link rel="stylesheet" href="/style.css?v=1.3">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { background: #0f172a; display: flex; flex-direction: column; min-height: 100vh; margin: 0; }
-        .share-header { padding: 2rem 5%; background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .share-logo { font-size: 1.5rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
-        .share-logo span { color: #6366f1; }
-        .share-container { flex: 1; padding: 2rem 5%; max-width: 1400px; margin: 0 auto; width: 100%; }
-        .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
-        .photo-card { border-radius: 12px; overflow: hidden; background: #1e293b; aspect-ratio: 4/5; position: relative; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #0a0b10;
+            color: #f1f2f7;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        .hidden { display: none !important; }
+
+        /* ── Header ─────────────────── */
+        .share-header {
+            padding: 1.5rem 5%;
+            background: rgba(17, 18, 24, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            position: sticky; top: 0; z-index: 50;
+        }
+        .share-logo {
+            font-size: 1.1rem; font-weight: 700; color: #fff;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .share-logo svg { color: #6366f1; }
+        .share-title {
+            margin-top: 2rem; padding: 0 5%;
+            font-size: 1.5rem; font-weight: 700;
+        }
+        .share-title span { color: #a78bfa; }
+        .share-subtitle {
+            padding: 0.3rem 5% 0;
+            font-size: 0.9rem; color: #54566a;
+        }
+
+        /* ── Grid ───────────────────── */
+        .share-container { flex: 1; padding: 1.5rem 5%; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .share-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 12px;
+        }
+        .photo-card {
+            border-radius: 10px; overflow: hidden;
+            background: #111218; aspect-ratio: 1;
+            position: relative; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.07);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .photo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
         .photo-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
-        .photo-card:hover img { transform: scale(1.05); }
-        .photo-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 1.5rem; background: linear-gradient(transparent, rgba(0,0,0,0.8)); opacity: 1; display: flex; align-items: flex-end; justify-content: space-between; }
-        .photo-name { color: #fff; font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%; }
-        .empty-share { text-align: center; margin-top: 100px; opacity: 0.5; }
+        .photo-card:hover img { transform: scale(1.03); }
+        .photo-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            padding: 1rem;
+            background: linear-gradient(transparent, rgba(0,0,0,0.75));
+            display: flex; align-items: flex-end; justify-content: space-between;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .photo-card:hover .photo-overlay { opacity: 1; }
+        .photo-name {
+            color: #fff; font-size: 0.8rem; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%;
+        }
+        .photo-dl-btn {
+            width: 32px; height: 32px;
+            background: rgba(255,255,255,0.15); backdrop-filter: blur(8px);
+            border-radius: 8px; border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; color: white;
+            transition: background 0.2s;
+        }
+        .photo-dl-btn:hover { background: rgba(99,102,241,0.5); }
+
+        /* ── States ─────────────────── */
+        .empty-share { text-align: center; margin-top: 100px; opacity: 0.4; }
+
+        /* ── Lightbox ───────────────── */
+        .lb {
+            position: fixed; inset: 0; z-index: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .lb-overlay {
+            position: absolute; inset: 0;
+            background: rgba(0,0,0,0.92); backdrop-filter: blur(4px);
+        }
+        .lb-content {
+            position: relative; z-index: 1;
+            max-width: 90vw; max-height: 90vh;
+            display: flex; flex-direction: column; align-items: center; gap: 14px;
+            animation: lbIn 0.2s ease;
+        }
+        @keyframes lbIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+        .lb-content img {
+            max-width: 90vw; max-height: 80vh;
+            object-fit: contain; border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .lb-info {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(26, 27, 37, 0.85); backdrop-filter: blur(12px);
+            padding: 0.6rem 1rem; border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.07);
+        }
+        .lb-name { font-size: 0.85rem; font-weight: 500; color: #f1f2f7; }
+        .lb-dims { font-size: 0.75rem; color: #54566a; }
+        .lb-dl {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.35rem 0.9rem; border-radius: 999px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white; font-size: 0.8rem; font-weight: 500;
+            border: none; cursor: pointer; transition: all 0.2s;
+            text-decoration: none;
+        }
+        .lb-dl:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.5); transform: translateY(-1px); }
+        .lb-close {
+            position: absolute; top: -50px; right: -10px;
+            width: 36px; height: 36px;
+            background: rgba(255,255,255,0.1); border-radius: 50%;
+            border: none; cursor: pointer; color: #9899a8;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .lb-close:hover { background: rgba(255,255,255,0.2); color: white; }
+        .lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 44px; height: 44px;
+            background: rgba(255,255,255,0.08); border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer; color: white;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; z-index: 2;
+        }
+        .lb-nav:hover { background: rgba(255,255,255,0.15); }
+        .lb-prev { left: 20px; }
+        .lb-next { right: 20px; }
     </style>
 </head>
 <body>
@@ -26,25 +153,68 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
-            Album<span>Apex</span> — Sélection
+            Album Apex
         </div>
     </header>
+
+    <h1 class="share-title" id="share-title">Photos partagées</h1>
+    <p class="share-subtitle" id="share-subtitle"></p>
 
     <main class="share-container">
         <div id="share-grid" class="share-grid"></div>
         <div id="share-loading" style="text-align:center; padding: 50px;">
-            <p>Chargement de la sélection...</p>
+            <p style="color:#54566a">Chargement de la sélection…</p>
         </div>
         <div id="share-empty" class="empty-share hidden">
-            <p>Cette sélection est vide ou n'existe plus.</p>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <p style="margin-top:12px;">Cette sélection est vide ou n'existe plus.</p>
         </div>
     </main>
+
+    <!-- Lightbox -->
+    <div id="lightbox" class="lb hidden">
+        <div class="lb-overlay" id="lb-overlay"></div>
+        <button class="lb-nav lb-prev" id="lb-prev" aria-label="Précédent">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="lb-content">
+            <button class="lb-close" id="lb-close" aria-label="Fermer">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <img id="lb-img" src="" alt="">
+            <div class="lb-info">
+                <span id="lb-name" class="lb-name"></span>
+                <span id="lb-dims" class="lb-dims"></span>
+                <a id="lb-dl" class="lb-dl" href="#" download>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Télécharger
+                </a>
+            </div>
+        </div>
+        <button class="lb-nav lb-next" id="lb-next" aria-label="Suivant">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+    </div>
 
     <script>
         const shareId = window.location.pathname.split('/').pop();
         const grid = document.getElementById('share-grid');
         const loading = document.getElementById('share-loading');
         const empty = document.getElementById('share-empty');
+        let photos = [];
+        let lbIdx = -1;
+
+        function getFullSrc(photo) {
+            return photo.filename.startsWith('http') ? photo.filename : `/uploads/${photo.filename}`;
+        }
+        function getThumbSrc(photo) {
+            const t = photo.thumbFilename || photo.filename;
+            return t.startsWith('http') ? t : `/uploads/${t}`;
+        }
 
         async function loadShare() {
             try {
@@ -52,22 +222,35 @@
                 if (!res.ok) throw new Error();
                 const data = await res.json();
                 loading.classList.add('hidden');
-                
-                if (!data.photos || data.photos.length === 0) {
-                    empty.classList.remove('hidden');
-                    return;
-                }
+                photos = data.photos || [];
 
-                data.photos.forEach(photo => {
+                document.getElementById('share-title').innerHTML = `Photos partagées par <span>${data.sharedBy || 'Anonyme'}</span>`;
+                document.getElementById('share-subtitle').textContent = `${photos.length} photo${photos.length > 1 ? 's' : ''}`;
+
+                if (photos.length === 0) { empty.classList.remove('hidden'); return; }
+
+                photos.forEach((photo, idx) => {
                     const card = document.createElement('div');
                     card.className = 'photo-card';
-                    const src = (photo.thumbFilename || photo.filename).startsWith('http') ? (photo.thumbFilename || photo.filename) : `/uploads/${photo.thumbFilename || photo.filename}`;
                     card.innerHTML = `
-                        <img src="${src}" alt="${photo.originalName}" />
+                        <img src="${getThumbSrc(photo)}" alt="${esc(photo.originalName)}" loading="lazy">
                         <div class="photo-overlay">
-                            <span class="photo-name">${photo.originalName}</span>
+                            <span class="photo-name">${esc(photo.originalName)}</span>
+                            <button class="photo-dl-btn" data-dl="${idx}" title="Télécharger">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                            </button>
                         </div>
                     `;
+                    card.addEventListener('click', (e) => {
+                        if (e.target.closest('[data-dl]')) {
+                            e.stopPropagation();
+                            downloadPhoto(idx);
+                            return;
+                        }
+                        openLb(idx);
+                    });
                     grid.appendChild(card);
                 });
             } catch (err) {
@@ -75,6 +258,68 @@
                 empty.classList.remove('hidden');
             }
         }
+
+        function esc(str) {
+            return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function downloadPhoto(idx) {
+            const photo = photos[idx];
+            if (!photo) return;
+            const link = document.createElement('a');
+            link.href = `/api/public/download/${shareId}/${photo.id}`;
+            link.download = photo.originalName || 'photo.jpg';
+            link.click();
+        }
+
+        // ── Lightbox ──────────────────
+        const lb = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lb-img');
+        const lbName = document.getElementById('lb-name');
+        const lbDims = document.getElementById('lb-dims');
+        const lbDl = document.getElementById('lb-dl');
+
+        function openLb(idx) {
+            lbIdx = idx;
+            updateLb();
+            lb.classList.remove('hidden');
+            document.addEventListener('keydown', lbKey);
+        }
+
+        function closeLb() {
+            lb.classList.add('hidden');
+            document.removeEventListener('keydown', lbKey);
+            lbIdx = -1;
+        }
+
+        function updateLb() {
+            const p = photos[lbIdx];
+            if (!p) return;
+            lbImg.src = getFullSrc(p);
+            lbImg.alt = p.originalName;
+            lbName.textContent = p.originalName;
+            lbDims.textContent = (p.width && p.height) ? `${p.width} × ${p.height}` : '';
+            lbDl.href = `/api/public/download/${shareId}/${p.id}`;
+            document.getElementById('lb-prev').style.display = lbIdx <= 0 ? 'none' : 'flex';
+            document.getElementById('lb-next').style.display = lbIdx >= photos.length - 1 ? 'none' : 'flex';
+        }
+
+        function lbNav(dir) {
+            const next = lbIdx + dir;
+            if (next >= 0 && next < photos.length) { lbIdx = next; updateLb(); }
+        }
+
+        function lbKey(e) {
+            if (e.key === 'Escape') closeLb();
+            if (e.key === 'ArrowLeft') lbNav(-1);
+            if (e.key === 'ArrowRight') lbNav(1);
+        }
+
+        document.getElementById('lb-close').addEventListener('click', closeLb);
+        document.getElementById('lb-overlay').addEventListener('click', closeLb);
+        document.getElementById('lb-prev').addEventListener('click', () => lbNav(-1));
+        document.getElementById('lb-next').addEventListener('click', () => lbNav(1));
+
         loadShare();
     </script>
 </body>

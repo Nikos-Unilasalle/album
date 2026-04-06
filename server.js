@@ -487,6 +487,8 @@ app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
     }
 
     const composites = [];
+    const FIT = opt.fit === 'contain' ? 'contain' : 'cover';
+
     for (let i = 0; i < photos.length; i++) {
         const photo = photos[i];
         const rect = rects[i];
@@ -506,7 +508,7 @@ app.post('/api/photos/contact-sheet', requireAuth, async (req, res) => {
         const rh = Math.max(10, Math.round(rect.h - BORDER*2));
 
         const resized = await sharp(buffer)
-           .resize(rw, rh, { fit: 'cover' })
+           .resize(rw, rh, { fit: FIT, background: { r: 0, g: 0, b: 0, alpha: 0 } })
            .extend({ top: BORDER, bottom: BORDER, left: BORDER, right: BORDER, background: BORDER_COLOR })
            .toBuffer();
            
@@ -610,7 +612,26 @@ app.get('/api/public/shares/:id', async (req, res) => {
         width: p.width,
         height: p.height
     }));
-    res.json({ photos });
+    const sharedByUser = (db.users || []).find(u => u.id === share.createdBy);
+    res.json({ photos, sharedBy: sharedByUser ? sharedByUser.username : 'Anonyme' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/public/download/:shareId/:photoId', async (req, res) => {
+  try {
+    const db = await readDB();
+    const share = (db.shares || []).find(s => s.id === req.params.shareId);
+    if (!share) return res.status(404).json({ error: 'Lien invalide' });
+    if (!share.photoIds.includes(req.params.photoId)) return res.status(403).json({ error: 'Photo non autorisée' });
+    const photo = db.photos.find(p => p.id === req.params.photoId);
+    if (!photo) return res.status(404).json({ error: 'Photo non trouvée' });
+    if (photo.filename.startsWith('http')) {
+      res.redirect(photo.filename.replace('/upload/', '/upload/fl_attachment/'));
+    } else {
+      const filepath = path.join(UPLOADS_DIR, photo.filename);
+      if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Fichier introuvable' });
+      res.download(filepath, photo.originalName || photo.filename);
+    }
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
